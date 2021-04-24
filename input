@@ -1,0 +1,12 @@
+number_states_nacme: 2
+initial_state: 2
+final_state: 1
+deep:0.00001
+Eif: 0.06951095
+Temperature: 298.15
+initial_coord_file: pentacene_nacme.log
+final_coord_file: pentacene_hess.log
+nacme_file: pentacene_nacme.log
+hess_file: pentacene_hess.dat
+hess_coord_file: pentacene_hess.log
+NumRotTrM: 6
