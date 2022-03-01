@@ -5,15 +5,28 @@ module phys_constants
 	integer(4)::number_states_nacme !Общее число состояний, которые расчитывались в nacme
 	integer(4)::init_state !Номер начального состояния для которого берутся nacme коэф
 	integer(4)::fin_state !Номер конечного состояния для которого берутся nacme коэф
-	!real(4)::Eif=0.10/27.113845
 	real(4)::Eif !Разность энергий между начальным и конечным состоянием
 	real(4), parameter:: PI= 3.1415927
-	real(4)::cutoff=0.05!Cutoff ограничивает набор квантовых чисел для перебор, чем он меньше тем больше набор
+	real(4)::cutoff=0.00001! В расчете не учитываются моды, чей фактор Хуана-Риса меньше чем cutoff
 	real(4)::cutoff2=0.001!Cutoff2 определяет глубину перебора квантовых чисел
+	real(4)::cutoff3=0.00001! В качестве проводящих мод учитываются только те моды, чья константа неадибатического
+				! взаимодействия имеет вклад больший чем cuttoff3
+	real(4)::deltakT=1.0 !Отношение интервала, в котором происходит расчет, к kT
+	real(4)::Hsoc=0.0 !Константа спин-орбитального взаимодействия
+	logical(4)::symmetry=.false. !Флаг учета симметрии при рассчете IC скорости
+	logical(4)::RateCalc=.true. !Выбор того будут рассчитваться скорости или строится функция плотности спектра
+	real(4)::MinEnergyRange !Нижняя граница диапазона, в котором строится график скорости
+	real(4)::MaxEnergyRange !Верхняя граница диапазона, в котором строится график скорости
+	real(4)::StepEnergyRange !Шаг энергии между двумя точками на графике
+	integer(4)::TypeOfDOS=1 !Выбор типа функции, аппрокимирующей плотность состояний DOS
+				!1=Pekar, 2=hybrid, 3=gauss
+	real(4):: ThresholdHRF=0.01 !Пороговое значения фактора Хуанга-Риса для гибридного метода 
+	integer(4)::res_mode=1 !Режим, в котором будет проходить рассчет 1 - IC, 2 - ISC, 3 - DOS
+	logical(4)::total_symmetry=.false. !Переход полносимметричный
 end module phys_constants
 
 !Функция HuangRhys расчитывает факторы Хуана-Риса
-!param[in] Omega(3000)::real(4) Колебательные моды молекулы [Размерность???]
+!param[in] Omega(3000)::real(4) Колебательные моды молекулы [а.е.в**-1]
 !param[in] A(3000,3000)::real(4) Обратная матрица к матрицы вектора
 !param[in] Mass(3000)::real(4) Массы атомов [Атомные единицы массы]
 !param[in] Ri(3000)::real(4) Координаты молекулы в initial state
@@ -29,48 +42,6 @@ function HuangRhys(Omega,A,Mass,Ri,Rf,number_modes)
 	return
 end function HuangRhys
 
-!Функция Pertrubation расчитывает возмущение для одного набора квантовых чисел P_n
-!param[in] nacme(3000)::real(4) NACME вектор от initial state
-!param[in] HRF(3000)::real(4) Факторы Хуана-Риса
-!param[in] Omega(3000)::real(4) Частоты колебаний мод [Размерность]
-!param[in] P_n(3000)::integer(4) Вектор квантовых чисел колебания каждой из мод Omega
-!param[in] P_M(3000)::real(4) Массы атомов [атомная единица масс]
-!param[in] P_A(3000,3000)::real(4) Инвертированнная матрица собственных векторов
-!param[in] NMRT::integer(4) Число мод, оторые исключаются из расчета
-!param[in] nm::integer(4) Общее число мод
-!param[out] Pertrubation::real(4) Возмущение от одного набора мод
-function Pertrubation(P_n, NMRT, nm)
-	real(4)::P_Mu(3000), FV(3000), SV(3000), PS(3000), B(3000,3000)
-	real(4)::Pertrubation,BB(3000,3000)
-	integer(4)::NMRT, P_n(3000), nm, k
-	character (len=10) let1, let2
-	real(4):: UnMul(3000,3000), UnSum(3000,3000)
-	common/UnMul/UnMul
-	common/UnSum/UnSum
-	common/TransMatr/BB,FV, SV
-	interface
-		recursive function difact(n) result (fav) 
-          		real fav 
-          		integer, intent(in) :: n 
-       		end 
-	end interface
-	if (minval(P_n)<0) then
-		write (let1,"(I10)") minloc(P_n)
-		write (let2,"(I10)") P_n(minloc(P_n))
-		print *, "n("//trim(ADJUSTL(let1))//")="//trim(ADJUSTL(let2))
-		call write_error(3,3,"")
-	end if
-	do k=NMRT+1,nm !!!Mark6
-		P_Mu(k)=UnMul(k,P_n(k)+1) 
-	end do
-	do k=NMRT+1,nm !!!Mark8
-		PS(k)=product(P_Mu(NMRT+1:k-1))*product(P_Mu(k+1:nm))*UnSum(k,P_n(k)+1)
-	end do
-	Pertrubation=sum(SV(NMRT+1:nm)*PS(NMRT+1:nm)) !!!Mark10
-	return
-end function Pertrubation
-
-
 
 
 !Функция FCF расчитывает факторы Франка-Кондона для одного набора квантовых чисел P_n
@@ -79,9 +50,9 @@ end function Pertrubation
 !param[in] NMRT::integer(4) Число мод, оторые исключаются из расчета
 !param[in] nm::integer(4) Общее число мод
 !param[out] FCF::real(4) Возмущение от одного набора мод
-function FCF(P_n, NMRT, nm)
+function FCF(P_n, NMRT, nm,mask)
 	real(4):: UnMul(3000,3000),P_Mu(3000), FCF
-	integer(4)::NMRT, P_n(3000), nm, k
+	integer(4)::NMRT, P_n(3000),mask(3000), nm, k
 	character (len=10) let1, let2
 	common/UnMul/UnMul
 	interface
@@ -98,11 +69,65 @@ function FCF(P_n, NMRT, nm)
 	end if
 	FCF=1.0
 	do k=NMRT+1,nm
-		FCF=FCF*UnMul(k,P_n(k)+1)
+		if (mask(k)>0) then
+			FCF=FCF*UnMul(k,P_n(k)+1)
+		end if
 	end do
 	!FCF=product(P_Mu(NMRT+1:nm))
 	return
 end function FCF
+
+function wn_c(wl,w0,s0,s0s,s1,s1s,n)
+	use phys_constants
+	complex(4)::wn_c
+	real(4)::A,B,C,wl,w0,s0,s0s,s1,s1s,z
+	integer(4)::n
+	!z=wl/(w0*sqrt(s0*s0s))
+	!A=(1.0+s1/(w0*s0))*(log(z+sqrt(z**2+1.0))-log(s0/s0s)/2.0)/w0
+	z=wl/(w0*s0)
+	A=(1.0+s1/(w0*s0))*log(z+sqrt(z**2+(s0s/s0)))/w0
+	B=(1.0+s1/(w0*s0))/w0
+	C=(s1/((w0**3.0)*s0))*wl/sqrt(wl**2/w0**2+s0*s0s)
+	wn_c=cmplx(A*cos(pi*n)+C,B*pi*n)
+	return
+end function wn_c
+
+function gfun(wn_c,HRFs,omega,nbe,Eif,NMRT,nm,mask)
+	complex(4)::gfun,wn_c
+	real(4)::HRFs(3000),omega(3000),Eif, nbe(3000)
+	integer(4)::i, mask(3000)
+	gfun=-wn_c*Eif
+	do i=NMRT+1,nm
+		gfun=gfun+HRFs(i)*mask(i)*&
+		((nbe(i)+1.0)*exp(wn_c*omega(i))+nbe(i)*exp(-wn_c*omega(i))-2*nbe(i)-1.0)
+	end do
+	return
+end function gfun
+
+function g1fun(wn_c,HRFs,omega,nbe,Eif,NMRT,nm,mask)
+	complex(4)::g1fun,wn_c
+	real(4)::HRFs(3000),omega(3000),Eif, nbe(3000)
+	integer(4)::i,mask(3000)
+	g1fun=-Eif
+	do i=NMRT+1,nm
+		g1fun=g1fun+HRFs(i)*omega(i)*mask(i)*&
+		((nbe(i)+1.0)*exp(wn_c*omega(i))-nbe(i)*exp(-wn_c*omega(i)))
+
+	end do
+	return
+end function g1fun
+
+function g2fun(wn_c,HRFs,omega,nbe,Eif,NMRT,nm,mask)
+	complex(4)::g2fun,wn_c
+	real(4)::HRFs(3000),omega(3000),Eif, nbe(3000)
+	integer(4)::i,mask(3000)
+	g2fun=0.0
+	do i=NMRT+1,nm
+		g2fun=g2fun+HRFs(i)*(omega(i)**2)*mask(i)*&
+		((nbe(i)+1.0)*exp(wn_c*omega(i))+nbe(i)*exp(-wn_c*omega(i)))
+	end do
+	return
+end function g2fun
 
 !Функция находит один из множителей фактора Франка-Кондона при заданных факторе Хуанна-Риса и КЧ
 !param[in] HRF::real(4) фактор Хуана-Риса
@@ -153,92 +178,11 @@ function sec_func(n,y,w)
        		end 
 	end interface
 	sec_func=sqrt(w*((real(n)-y)**2.0)*(y**real(n-1))*exp(-y)/(2*difact(n)))
+	if ((y==0.0) .and. (n==0)) then
+		sec_func=0.0
+	end if
 	return
 end function sec_func
-
-!Процедура ищет моды, которые дают максимальный вклад в скорость
-!param[in] HRFs(3000)::real(4) факторы Хуана-Риса
-!param[in] nm::integer(4) Общее число мод
-!param[in] NMRT:integer(4) Число мод, которые исключаются из расчета
-!param[in] Cuttoff:real(4) Параметр отсечки. Моды чей вклад меньше cutoff отсекаются
-!param[in] P_M(3000)::real(4) Вектор, содержащий массы атомов
-!param[in] P_A(3000,3000)::real(4)
-!param[out] mask_cont(3000)::integer(4) Маска значащих мод
-subroutine found_maxima(HRFs,nm,NMRT,cutoff,P_M,P_A,omega, nacme)
-	real(4)::HRFs(3000), max_first_func(3000), max_sec_func(3000), vec(3000), cutoff, cutsum
-	real(4):: contrib(3000), sum_max_con, PS(3000), SV(3000)
-	real(4)::P_M(3000), P_A(3000,3000),B(3000,3000),omega(3000), nacme(3000), FV(3000)
-	integer i, j, mask_cont(3000), order_list(3000), diap, nm,NMRT
-	common/contibuton/ mask_cont
-	interface
-		function first_func(n,y)
-			integer n
-			real y
-		end function first_func
-		function sec_func(n,y,w)
-			integer n
-			real y, w
-		end function sec_func
-	end interface
-	!Поиск максиммумов первой функции для каждой моды
-	do i=NMRT+1, nm
-		max_first_func(i)=max(first_func(floor(HRFs(i)),HRFs(i)),first_func(ceiling(HRFs(i)),HRFs(i)))
-	end do
-	
-	!Поиск максимумов второй функции для каждой моды
-	do i=NMRT+1, nm
-		if(i<=40) then
-			diap=20
-		else 
-			diap=int(i/2.0)
-		end if
-		vec(1:diap)=0.0
-		do j=0,diap-1
-			if (floor(HRFs(i))-int(diap/2.0)+j>=0) vec(1+j)=sec_func((floor(HRFs(i))-int(diap/2.0)+j),HRFs(i),omega(i))
-		end do
-		max_sec_func(i)=maxval(vec(1:diap))
-	end do
-
-	!!!!Вычисляем вклад каждой моды в скорость перехода
-	PS(NMRT+1:nm)=max_sec_func(NMRT+1:nm)/max_first_func(NMRT+1:nm)
-	do k=1, nm  
-		FV(k)=nacme(k)/P_M(k)
-	end do
-	B(1:nm,NMRT+1:nm)=TRANSPOSE(P_A(NMRT+1:nm,1:nm))
-	do i=1,int(nm/3.0)
-		B(i,NMRT+1:nm)=sqrt(P_M(i))*B(i,NMRT+1:nm)
-	end do
-	SV(NMRT+1:nm)=matmul(FV(1:nm),B(1:nm,NMRT+1:nm))
- 	contrib(NMRT+1:nm)=SV(NMRT+1:nm)*PS(NMRT+1:nm)
-	sum_max_con=sum(abs(contrib(NMRT+1:nm)))
-	contrib(NMRT+1:nm)=contrib(NMRT+1:nm)/sum_max_con !Вклад, который вносит мода
-	do i=1, nm !Выписываем начальный порядок уровней
-		order_list(i)=i
-	end do
-	!сортируем уровни по величине их вклад
-	do i=NMRT+1, nm
-		do j=NMRT+1, nm-1
-			if (abs(contrib(j+1))<abs(contrib(j))) then
-				contrib(j)=contrib(j)+contrib(j+1)
-				contrib(j+1)=contrib(j)-contrib(j+1)
-				contrib(j)=contrib(j)-contrib(j+1)
-				order_list(j)=order_list(j)+order_list(j+1)
-				order_list(j+1)=order_list(j)-order_list(j+1)
-				order_list(j)=order_list(j)-order_list(j+1)
-			end if
-		end do
-	end do
-	!
-	!Обнуляем элементы маски, соответствующие незначащим модам
-	mask_cont(NMRT+1:nm)=1 
-	cutsum=0.0
-	do i=NMRT+1,nm
-		if (cutsum+abs(contrib(i))<cutoff) then
-			cutsum=cutsum+abs(contrib(i))
-			mask_cont(order_list(i))=0
-		end if
-	end do
-end subroutine found_maxima
 
 
 !Процедура поиска маскимальных значений квантовых чисел
@@ -252,9 +196,8 @@ end subroutine found_maxima
 subroutine found_area(HRFs,omega,NMRT,nm, cutoff)
 	real(4)::HRFs(3000), vec1(3000),vec2(3000), cutoff
 	real(4)::omega(3000), max_val1, max_val2
-	integer(4):: mask_cont(3000), NMRT, nm, i, j, k, max_loc1
+	integer(4):: NMRT, nm, i, j, k, max_loc1
 	integer(4):: max_loc2,  nminc(3000), nmaxc(3000),diap
-	common/contibuton/ mask_cont
 	common/area/ nminc, nmaxc
 	interface
 		function first_func(n,y)
@@ -298,3 +241,211 @@ subroutine found_area(HRFs,omega,NMRT,nm, cutoff)
 		nminc(i)=max_loc2-k !Максимальное значение КЧ для i-ой моды
 	end do
 end subroutine found_area
+
+!Функция поворота конфигурации молекулы относительно референсной так, чтобы обе конфигурации удовлетворяли условиям Эккарта
+!param[in] coord_rot(3000)::integer(4) Координаты вращаемой конфигурации
+!param[in] coord_ref(3000)::integer(4) Координты референсной конфигурации, относительно которой будет происходить вращение
+!param[in] numbers_of_atoms::integer(4) Число атомов в молекуле
+!param[in] mass(3000)::integer(4) Вектор, содержащий массы атомов для 3х проекций
+!param[in] apar(3000)::real(4) Вектор, который будет повернут относительно референсной молекулы так же, как и вращаемая молекула 
+function rotate_molecula(coord_rot,coord_ref,numbers_of_atoms,mass,apar)
+	integer(4)::numbers_of_atoms, i, j, atom_pos(1000), apc,hap,hap2,nm
+	real(4)::coord_rot(3000),coord_ref(3000),mass(3000),mass_of_atoms(1000), mc, x, y, z, r
+	real(4)::theta0,phi0,psi0,theta1,phi1,psi1, old_coord(3000), high, low, axy, ayz, azx
+	real(4)::rotate_molecula(2,3000),apar(3000)
+	logical not_Oz
+	!Поиск самого тяжелого атома
+	do i=1,numbers_of_atoms
+		atom_pos(i)=i
+		!print *, mass(3*(i-1)+1), coord_ref(3*(i-1)+1), coord_ref(3*(i-1)+2), coord_ref(3*(i-1)+3)
+	end do
+	mass_of_atoms(1:numbers_of_atoms)=mass(1:numbers_of_atoms:3)
+	do i=1,numbers_of_atoms
+		do j=1,numbers_of_atoms-1
+			if (mass_of_atoms(j)<mass_of_atoms(j+1)) then
+				mc=mass_of_atoms(j+1)
+				mass_of_atoms(j+1)=mass_of_atoms(j)
+				mass_of_atoms(j)=mc
+				apc=atom_pos(j+1)
+				atom_pos(j+1)=atom_pos(j)
+				atom_pos(j)=apc
+			end if
+		end do
+	end do
+	
+	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	!Выбирается самый тяжелый атом не лежащий в начале координат или на оси z
+	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	index_a=1
+	hap=atom_pos(index_a) ! Позиция самого тяжелого атома
+	x=coord_ref(3*(hap-1)+1)
+	y=coord_ref(3*(hap-1)+2)
+	z=coord_ref(3*hap)
+	r=sqrt(x*x+y*y+z*z)
+	if (r<=0.0001) then !Проверка, что атом находится не в центра
+		index_a=2 
+		hap=atom_pos(2)
+		x=coord_ref(3*(hap-1)+1)
+		y=coord_ref(3*(hap-1)+2)
+		z=coord_ref(3*hap)
+		r=sqrt(x*x+y*y+z*z)
+	end if
+	not_Oz=.false.
+	do while ((.not. (not_Oz)) .and. (index_a<=numbers_of_atoms)) 
+		if (x*x+y*y<=0.0001) then !Проверка, что атом находится не на оси z
+			hap=atom_pos(index_a)
+			x=coord_ref(3*(hap-1)+1)
+			y=coord_ref(3*(hap-1)+2)
+			z=coord_ref(3*hap)
+			r=sqrt(x*x+y*y+z*z)
+		else
+			not_Oz=.true.
+		end if
+		index_a=index_a+1
+	end do
+	!Определение координат самых тяжелых атомов для референсной и поварачиваемой молекулы
+	theta0=acos(z/r)
+	phi0=atan2(y,x)
+	x=coord_rot(3*(hap-1)+1)
+	y=coord_rot(3*(hap-1)+2)
+	z=coord_rot(3*hap)
+	r=sqrt(x*x+y*y+z*z)
+	theta1=acos(z/r)
+	phi1=atan2(y,x)
+
+	!Совмещение на одной оси самых тяжелых атомов из двух молекула
+	nm=3*numbers_of_atoms
+	
+	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	!Поворот молекулы относительно центра масс таким образом, чтобы найденный самый тяжелый атом оказался на оси Z
+	!Вращаем углы theta и phi
+	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	old_coord(1:3*numbers_of_atoms)=coord_ref(1:3*numbers_of_atoms)
+	coord_ref(1:nm:3)=old_coord(1:nm:3)*cos(-phi0)-old_coord(2:nm:3)*sin(-phi0) !Поворот молекулы
+	coord_ref(2:nm:3)=old_coord(1:nm:3)*sin(-phi0)+old_coord(2:nm:3)*cos(-phi0)
+
+	old_coord(1:3*numbers_of_atoms)=coord_ref(1:3*numbers_of_atoms)
+	coord_ref(3:nm:3)=old_coord(3:nm:3)*cos(-theta0)-old_coord(1:nm:3)*sin(-theta0) !Поворот молекулы
+	coord_ref(1:nm:3)=old_coord(3:nm:3)*sin(-theta0)+old_coord(1:nm:3)*cos(-theta0)
+
+	old_coord(1:3*numbers_of_atoms)=coord_rot(1:3*numbers_of_atoms)
+	coord_rot(1:nm:3)=old_coord(1:nm:3)*cos(-phi1)-old_coord(2:nm:3)*sin(-phi1) !Поворот молекулы
+	coord_rot(2:nm:3)=old_coord(1:nm:3)*sin(-phi1)+old_coord(2:nm:3)*cos(-phi1)
+	old_coord(1:3*numbers_of_atoms)=apar(1:3*numbers_of_atoms)
+	apar(1:nm:3)=old_coord(1:nm:3)*cos(-phi1)-old_coord(2:nm:3)*sin(-phi1) !Поворот молекулы
+	apar(2:nm:3)=old_coord(1:nm:3)*sin(-phi1)+old_coord(2:nm:3)*cos(-phi1)
+
+	old_coord(1:3*numbers_of_atoms)=coord_rot(1:3*numbers_of_atoms)
+	coord_rot(3:nm:3)=old_coord(3:nm:3)*cos(-theta1)-old_coord(1:nm:3)*sin(-theta1) !Поворот молекулы
+	coord_rot(1:nm:3)=old_coord(3:nm:3)*sin(-theta1)+old_coord(1:nm:3)*cos(-theta1)
+	old_coord(1:3*numbers_of_atoms)=apar(1:3*numbers_of_atoms)
+	apar(3:nm:3)=old_coord(3:nm:3)*cos(-theta1)-old_coord(1:nm:3)*sin(-theta1) !Поворот молекулы
+	apar(1:nm:3)=old_coord(3:nm:3)*sin(-theta1)+old_coord(1:nm:3)*cos(-theta1)
+
+	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	!Нахождение второго по тяжести атома нележащего на оси z
+	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	hap2=atom_pos(index_a)
+	x=coord_ref(3*(hap2-1)+1)
+	y=coord_ref(3*(hap2-1)+2)
+	z=coord_ref(3*hap2)
+	r=sqrt(x*x+y*y+z*z)
+	not_Oz=.false.
+	do while ((.not. (not_Oz)) .and. (index_a<=numbers_of_atoms)) 
+		if (x*x+y*y<=0.00001) then !Проверка, что атом находится не на оси z
+			
+			hap2=atom_pos(index_a)
+			x=coord_ref(3*(hap2-1)+1)
+			y=coord_ref(3*(hap2-1)+2)
+			z=coord_ref(3*hap2)
+			r=sqrt(x*x+y*y+z*z)
+		else
+			not_Oz=.true.
+		end if
+		index_a=index_a+1
+	end do
+
+	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	! Поворот вращаемой молекулы вокруг оси z так, чтобы второй по тяжести атом 
+	! оказался в одной плоскости со своим гомологом из референсной
+	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	psi0=atan2(coord_ref(3*(hap2-1)+2), coord_ref(3*(hap2-1)+1)) !Угол поворота для молекулы в конечном состоянии
+	psi1=atan2(coord_rot(3*(hap2-1)+2), coord_rot(3*(hap2-1)+1))
+	old_coord(1:3*numbers_of_atoms)=coord_rot(1:3*numbers_of_atoms)
+	coord_rot(1:nm:3)=old_coord(1:nm:3)*cos(psi0-psi1)-old_coord(2:nm:3)*sin(psi0-psi1) !Поворот молекулы
+	coord_rot(2:nm:3)=old_coord(1:nm:3)*sin(psi0-psi1)+old_coord(2:nm:3)*cos(psi0-psi1)
+	old_coord(1:3*numbers_of_atoms)=apar(1:3*numbers_of_atoms)
+	apar(1:nm:3)=old_coord(1:nm:3)*cos(psi0-psi1)-old_coord(2:nm:3)*sin(psi0-psi1) !Поворот молекулы
+	apar(2:nm:3)=old_coord(1:nm:3)*sin(psi0-psi1)+old_coord(2:nm:3)*cos(psi0-psi1)
+
+	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	!!!Поворот молекул обратно по theta и phi
+	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+	old_coord(1:3*numbers_of_atoms)=coord_rot(1:3*numbers_of_atoms)
+	coord_rot(3:nm:3)=old_coord(3:nm:3)*cos(theta0)-old_coord(1:nm:3)*sin(theta0) !Поворот молекулы
+	coord_rot(1:nm:3)=old_coord(3:nm:3)*sin(theta0)+old_coord(1:nm:3)*cos(theta0)
+	old_coord(1:3*numbers_of_atoms)=apar(1:3*numbers_of_atoms)
+	apar(3:nm:3)=old_coord(3:nm:3)*cos(theta0)-old_coord(1:nm:3)*sin(theta0) !Поворот молекулы
+	apar(1:nm:3)=old_coord(3:nm:3)*sin(theta0)+old_coord(1:nm:3)*cos(theta0)
+
+	old_coord(1:3*numbers_of_atoms)=coord_rot(1:3*numbers_of_atoms)
+	coord_rot(1:nm:3)=old_coord(1:nm:3)*cos(phi0)-old_coord(2:nm:3)*sin(phi0) !Поворот молекулы
+	coord_rot(2:nm:3)=old_coord(1:nm:3)*sin(phi0)+old_coord(2:nm:3)*cos(phi0)
+	old_coord(1:3*numbers_of_atoms)=apar(1:3*numbers_of_atoms)
+	apar(1:nm:3)=old_coord(1:nm:3)*cos(phi0)-old_coord(2:nm:3)*sin(phi0) !Поворот молекулы
+	apar(2:nm:3)=old_coord(1:nm:3)*sin(phi0)+old_coord(2:nm:3)*cos(phi0)
+
+	old_coord(1:3*numbers_of_atoms)=coord_ref(1:3*numbers_of_atoms)
+	coord_ref(3:nm:3)=old_coord(3:nm:3)*cos(theta0)-old_coord(1:nm:3)*sin(theta0) !Поворот молекулы
+	coord_ref(1:nm:3)=old_coord(3:nm:3)*sin(theta0)+old_coord(1:nm:3)*cos(theta0)
+
+	old_coord(1:3*numbers_of_atoms)=coord_ref(1:3*numbers_of_atoms)
+	coord_ref(1:nm:3)=old_coord(1:nm:3)*cos(phi0)-old_coord(2:nm:3)*sin(phi0) !Поворот молекулы
+	coord_ref(2:nm:3)=old_coord(1:nm:3)*sin(phi0)+old_coord(2:nm:3)*cos(phi0)
+
+	axy=1.0
+	ayz=1.0
+	azx=1.0
+	do while (abs(axy)+abs(ayz)+abs(azx)>0.00000001)
+	!Поворот вокруг оси z	
+	high=sum((coord_rot(1:nm:3)*coord_ref(2:nm:3)-coord_rot(2:nm:3)*coord_ref(1:nm:3))*mass(1:nm:3))
+    	low=sum((coord_rot(1:nm:3)*coord_ref(1:nm:3)+coord_rot(2:nm:3)*coord_ref(2:nm:3))*mass(1:nm:3))
+    	axy=atan(high/low) !Угол поворота для молекулы в конечном состоянии
+	!print *, axy
+    	old_coord(1:3*numbers_of_atoms)=coord_rot(1:3*numbers_of_atoms)
+    	coord_rot(1:nm:3)=old_coord(1:nm:3)*cos(axy)-old_coord(2:nm:3)*sin(axy) !Поворот молекулы
+    	coord_rot(2:nm:3)=old_coord(1:nm:3)*sin(axy)+old_coord(2:nm:3)*cos(axy)
+	old_coord(1:3*numbers_of_atoms)=apar(1:3*numbers_of_atoms)
+    	apar(1:nm:3)=old_coord(1:nm:3)*cos(axy)-old_coord(2:nm:3)*sin(axy) !Поворот молекулы
+    	apar(2:nm:3)=old_coord(1:nm:3)*sin(axy)+old_coord(2:nm:3)*cos(axy)
+
+	!Поворот вокруг оси x
+	high=sum((coord_rot(2:nm:3)*coord_ref(3:nm:3)-coord_rot(3:nm:3)*coord_ref(2:nm:3))*mass(1:nm:3))
+    	low=sum((coord_rot(2:nm:3)*coord_ref(2:nm:3)+coord_rot(3:nm:3)*coord_ref(3:nm:3))*mass(1:nm:3))
+    	ayz=atan(high/low) !Угол поворота для молекулы в конечном состоянии
+	!print *, ayz
+    	old_coord(1:3*numbers_of_atoms)=coord_rot(1:3*numbers_of_atoms)
+    	coord_rot(2:nm:3)=old_coord(2:nm:3)*cos(ayz)-old_coord(3:nm:3)*sin(ayz) !Поворот молекулы
+    	coord_rot(3:nm:3)=old_coord(2:nm:3)*sin(ayz)+old_coord(3:nm:3)*cos(ayz)
+	old_coord(1:3*numbers_of_atoms)=apar(1:3*numbers_of_atoms)
+    	apar(2:nm:3)=old_coord(2:nm:3)*cos(ayz)-old_coord(3:nm:3)*sin(ayz) !Поворот молекулы
+    	apar(3:nm:3)=old_coord(2:nm:3)*sin(ayz)+old_coord(3:nm:3)*cos(ayz)
+
+	!Поворот вокруг оси y
+	high=sum((coord_rot(3:nm:3)*coord_ref(1:nm:3)-coord_rot(1:nm:3)*coord_ref(3:nm:3))*mass(1:nm:3))
+    	low=sum((coord_rot(3:nm:3)*coord_ref(3:nm:3)+coord_rot(1:nm:3)*coord_ref(1:nm:3))*mass(1:nm:3))
+    	azx=atan(high/low) !Угол поворота для молекулы в конечном состоянии
+	!print *, azx
+    	old_coord(1:3*numbers_of_atoms)=coord_rot(1:3*numbers_of_atoms)
+    	coord_rot(3:nm:3)=old_coord(3:nm:3)*cos(azx)-old_coord(1:nm:3)*sin(azx) !Поворот молекулы
+    	coord_rot(1:nm:3)=old_coord(3:nm:3)*sin(azx)+old_coord(1:nm:3)*cos(azx)
+	old_coord(1:3*numbers_of_atoms)=apar(1:3*numbers_of_atoms)
+    	apar(3:nm:3)=old_coord(3:nm:3)*cos(azx)-old_coord(1:nm:3)*sin(azx) !Поворот молекулы
+    	apar(1:nm:3)=old_coord(3:nm:3)*sin(azx)+old_coord(1:nm:3)*cos(azx)
+	!print *,""
+	end do
+	rotate_molecula(1,:)=coord_rot
+	rotate_molecula(2,:)=apar
+	return
+end function rotate_molecula

@@ -6,7 +6,7 @@ module errors_description
 	data TypeError(1:3) /	"Error in input file", & ! Type 1
 				"Input data error", & ! Type 2
 				"Calculation error"/ ! Type 3
-	data InputFilesErrors(1:19) /&
+	data InputFilesErrors(1:34) /&
 	"Number of states does not determined in the input file", & ! code 1
 	"Number of the initial state does not determined in the input file", & ! code 2
 	"Number of the final state does not determined in the input file", & ! code 3
@@ -24,8 +24,23 @@ module errors_description
 	"There is an incorrect mass of element in hess-file", & ! code 15
 	"All hessian elements are zero", & ! code 16
 	"The nacme file of initial state does not determined in the input file", & ! Code 17
-	"cutoff in incorrect format", & ! Code 18
-	"deep in incorrect format"/ !code 19
+	"'cutoff' has incorrect format", & ! Code 18
+	"'deep' has incorrect format", & !code 19
+	"Number of atoms must be at least 2", & ! Code 20
+	"'pmcutoff' has incorrect format", & ! Code 21
+	"'deltakT' has incorrect format", & ! Code 22
+	"The spin-orbital constant Hsoc has incorrect format", & !Code 23
+	"Undefined type of the DOS", &!Code 24
+	"Threshold is lower than the minimal allowed Huang-Rhys factor", &  !Code 25
+	"Mode is incorrected!", & !Code 26
+	"Emin is undefinded!", & !Code 27
+	"Emax is undefinded!", & !Code 28
+	"Estep is undefinded!", &  !Code 29
+	"Emin cannot be negative", & !Code 30
+	"Emax cannot be less than Emin", & !Code 31
+	"Estep cannot be negative", & !Code 32
+	"Symmetry is defined incorrect", & !Code 33
+	"TotalSymmetry is defined incorrect"/ !Code 34
 	data InputDataErrors(1:9) / 	"is not exist", & ! code 1
 					"is empty", & ! code 2
 					"has unexpected data", & ! code 3

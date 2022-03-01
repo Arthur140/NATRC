@@ -4,7 +4,6 @@ final_state: 1
 deep:0.00001
 Eif: 0.024203197
 Temperature: 10.0
-mode:ISC
 DOS:gauss
 hsoc:0.02
 initial_coord_file: Data/naph/naphthalene_opt1SB3u_nacme.log

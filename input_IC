@@ -1,0 +1,11 @@
+number_states_nacme: 2
+initial_state: 2
+final_state: 1
+deep:0.00001
+Eif: 0.120314724
+Temperature: 10.0
+initial_coord_file: Data/naph/naphthalene_opt1SB3u_nacme.log
+final_coord_file: Data/naph/naphthalene_mc_1SAg_hess.log
+nacme_file: Data/naph/naphthalene_opt1SB3u_nacme.log
+hess_file: Data/naph/naphthalene_mc_1SAg_hess.dat
+hess_coord_file: Data/naph/naphthalene_mc_1SAg_hess.log
