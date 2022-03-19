@@ -1,7 +1,7 @@
 module phys_constants
 	real(4)::speed_light=137.035999084 !Скорость света в атомных единицах
 	real(4)::kT=0.00094418498724 !Энергия kT выраженная в Хартри при T=298.15K
-	integer(4)::NumRotTrM=6 !Число мод, исключаемые из расчета (6 или 5)
+	integer(4)::NumRotTrM=6 !Число мод, исключаемые из расчета 
 	integer(4)::number_states_nacme !Общее число состояний, которые расчитывались в nacme
 	integer(4)::init_state !Номер начального состояния для которого берутся nacme коэф
 	integer(4)::fin_state !Номер конечного состояния для которого берутся nacme коэф
@@ -142,7 +142,11 @@ function under_mult(HRF, n)
           		integer, intent(in) :: n 
        		end 
 	end interface
-	under_mult=sqrt(exp(-HRF)*(HRF**n)/difact(n))
+	if ((n>=0) .and. (y>=0.0)) then
+		under_mult=sqrt(exp(-HRF)*(HRF**n)/difact(n))
+	else
+		under_mult=0.0
+	endif
 	return
 end function under_mult
 
@@ -159,7 +163,11 @@ function first_func(n,y)
           		integer, intent(in) :: n 
        		end 
 	end interface
-	first_func=sqrt((y**real(n))*exp(-y)/difact(n))
+	if ((n>=0) .and. (y>=0.0)) then
+		first_func=sqrt((y**real(n))*exp(-y)/difact(n))
+	else
+		first_func=0.0
+	endif
 	return
 end function first_func
 
@@ -177,9 +185,10 @@ function sec_func(n,y,w)
           		integer, intent(in) :: n 
        		end 
 	end interface
-	sec_func=sqrt(w*((real(n)-y)**2.0)*(y**real(n-1))*exp(-y)/(2*difact(n)))
-	if ((y==0.0) .and. (n==0)) then
+	if (((y==0.0) .and. (n==0)) .or. (y<0.0) .or. (n<0)) then
 		sec_func=0.0
+	else
+		sec_func=sqrt(w*((real(n)-y)**2.0)*(y**real(n-1))*exp(-y)/(2*difact(n)))
 	end if
 	return
 end function sec_func
@@ -216,8 +225,7 @@ subroutine found_area(HRFs,omega,NMRT,nm, cutoff)
 			diap=int(i/4.0)
 		end if
 		
-		vec1(1:diap)=0.0
-		vec2(1:diap)=0.0
+		vec1=0.0; vec2=0.0
 		do j=1,diap
 			vec1(j)=sec_func((floor(HRFs(i))+j),HRFs(i),omega(i))
 			if (ceiling(HRFs(i))-j>=0) vec2(j)=sec_func((ceiling(HRFs(i))-j),HRFs(i),omega(i))

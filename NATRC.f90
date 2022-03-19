@@ -36,6 +36,7 @@ include "errors.f90"
     real(4)::start_time, finish_time, Evib, delta, residual, centr_x, centr_y, centr_z
     real(4)::nbe(3000),del_w, Er, sigma0, sigma0s, sigma1, sigma1s, w0, wr, wi, g1r, g1i, stepC
     real(4)::Vsum3add, Vsum3, Vsum1, del_w2, HRFsm(3000), omegam(3000), nbem(3000), threshold, HRFmin, HRFmax
+    real(4)::minj, maxj, minv, maxv
     logical EndCycle, flag, label_flag
     character (80) coord_init_file, coord_fin_file, nacme_file, hess_file, constwrite, hess_log_file
     complex(4)::resultval, g2v, g1c
@@ -113,7 +114,7 @@ include "errors.f90"
     print *, "---------------------------------------------------------------------------"
     print *, "                               INPUT DATA                                  "
     print *, "---------------------------------------------------------------------------"
-    call read_input()
+    call read_input() !Чтения входных данных из файла input
     if (res_mode==1) then
        print *, ""
        print *, "Non-adiabatic coupling elements (NACME) in the initial state:"
@@ -160,7 +161,7 @@ include "errors.f90"
     print *, "(from '"//ADJUSTL(trim(hess_log_file))//"')"
     call read_coord(ADJUSTL(trim(hess_log_file)),3) 	!Чтение координат из гессиан файла
 							! Число атомов записывается в number_atoms, 
-							! координаты в coords(2,1:3*number_atoms)
+							! координаты в coords(3,1:3*number_atoms)
 							!наименование элемента в labels(1:3*number_atoms)
     label_flag=.true.
     do i=1,3*number_atoms,3
@@ -230,7 +231,7 @@ include "errors.f90"
     
     print *, "Coordinate distorsions due to transfer between states:"
     print *, " ATOM      ATOMIC                      DISTORSIONS (BOHR)"
-    print *, "           CHARGE        dX                  dY                  dZ"
+    print *, "            MASS         dX                  dY                  dZ"
     do i=1,nm,3
        write (*, '(A10,F6.1,F20.10,F20.10,F20.10)') labels(i), mass(i)/1822.888, coord(2,i)-coord(1,i), &
 						coord(2,i+1)-coord(1,i+1), coord(2,i+2)-coord(1,i+2)
@@ -286,7 +287,7 @@ include "errors.f90"
 		sigma0s=sigma0s+HRFs(k)*nbe(k)
 	end do
 
-	HRFmin=1.0; HRFmax=HRFs(NumRotTrM+1)
+	HRFmin=HRFs(NumRotTrM+1); HRFmax=HRFs(NumRotTrM+1)
 	do k=NumRotTrM+2,3*number_atoms
 		if ((HRFs(k)<HRFmin) .and. (HRFs(k)>cutoff)) then 
 			HRFmin=HRFs(k)
@@ -300,7 +301,7 @@ include "errors.f90"
 	else if (TypeOfDOS==2) then
 		Threshold=ThresholdHRF
 		if (Threshold>HRFmax) then 
-			print *, "Warning! Threshold is higher than the maximum Huang-Rhys facror. The Hybrid function is same Gaussian"
+	print *, "Warning! Threshold is higher than the maximum Huang-Rhys facror. The Hybrid function degenerate into Gaussian"
 		else if (Threshold<HRFmin) then
 			print *, "Warning! The minimal Huang-Rhys facror is ",HRFmin
 			call write_error(1,25,"")
@@ -324,10 +325,10 @@ include "errors.f90"
    (HRFs(NumRotTrM+1:3*number_atoms)>Threshold)),mask(NumRotTrM+1:3*number_atoms)) 
 
 !!!Mark11start*************************************************
-    Nmax(NumRotTrM+1:3*number_atoms)=Eif/Omega(NumRotTrM+1:3*number_atoms)
+    Nmax(NumRotTrM+1:3*number_atoms)=Eif/Omega(NumRotTrM+1:3*number_atoms) 
     !Максимальное число уровней для каждой моды, которое расчитывается так чтобы их энергия не была выше Eif
 
-    call found_area(HRFs,omega,NumRotTrM,nm, cutoff2)
+    call found_area(HRFs,omega,NumRotTrM,nm, cutoff2) !!!!!!!!!!!!!!found_area2
     !Находится диапазон в котором будет происходить перебор КЧ колебательных мод.
     !Перебор КЧ за пределами диапазона не имеет смысла.
     Vsum=0.0 !Инициализация переменной для суммирования квадратов возмущений
@@ -340,12 +341,10 @@ include "errors.f90"
     end do !Поиск последней моды с ненулевым фактором Хуанга-Риса 
 
 	mask=mask-mask4
-	counter=0
 	 Er=sum(HRFs(NumRotTrM+1:nm)*omega(NumRotTrM+1:nm)*mask(NumRotTrM+1:nm))
 	
-    del_w=sqrt(sum(HRFs(NumRotTrM+1:nm)*(omega(NumRotTrM+1:nm)**2)*(2*nbe(NumRotTrM+1:nm)+1)*&
+    del_w=sqrt(sum(HRFs(NumRotTrM+1:nm)*(omega(NumRotTrM+1:nm)**2)*(2*nbe(NumRotTrM+1:nm)+1.0)*&
 		mask(NumRotTrM+1:nm)))
-	delta=100*del_w !
 
 
     	if (res_mode/=2) then !Если ищется скорость конверсии, то найти неадибатические константы в пространстве нормальных координат
@@ -368,27 +367,26 @@ include "errors.f90"
 
 	print *, ""
 	print *, "Characteristics of mode in transfer process:"
-    	print *, "-------------------------------------------------------------------"
+    	print *, "----------------------------------------------------------"
 	if (res_mode==1) then
-		print *, "  Mode   Frequency        <f|d/dQ|i>      Huang-Rhys F.     Nmax"
-    		print *, "-------------------------------------------------------------------"
+		print *, "  Mode   Frequency        <f|d/dQ|i>      Huang-Rhys F.     "
+    		print *, "----------------------------------------------------------"
 		do k=NumRotTrM+1,nm
-			 write (*, '(I6,F13.2,E18.2,E18.2,I10)'), k, omega(k)*219474.09375, SV(k), HRFs(k), mask3(k)!Nmax(k)
+			 write (*, '(I6,F13.2,E18.2,E18.2)'), k, omega(k)*219474.09375, SV(k), HRFs(k)
 		end do !Ввывод таблицы с промежуточными параметрами для расчета скорости внутренней конверсии
 	else 
-		print *, "  Mode   Frequency      Huang-Rhys F.     Nmax"
-    		print *, "-------------------------------------------------------------------"
+		print *, "  Mode   Frequency      Huang-Rhys F.     "
+    		print *, "----------------------------------------------------------"
 		do k=NumRotTrM+1,nm
-			 write (*, '(I6,F13.2,E18.2,I10)'), k, omega(k)*219474.09375, HRFs(k), Nmax(k)
+			 write (*, '(I6,F13.2,E18.2)'), k, omega(k)*219474.09375, HRFs(k)
 		end do !Ввывод таблицы с промежуточными параметрами для расчета скорости интеркомбинационного перехода
 	end if
-	print *, "-------------------------------------------------------------------"
+	print *, "-----------------------------------------------------------"
 	print *, "'Mode' is number of a vibronic mode,"
 	print *, "'Frequency' of mode this mode is in cm-1,"
 	if (res_mode==1) then
-		print *, "'<f|d/dQ|i>' non-adiabatic coupling in normal cordinates,"
+		print *, "'<f|d/dQ|i>' non-adiabatic coupling in normal cordinates (atomic units),"
 	end if
-	print *, "'Nmax' is maximum value for quantum number of this mode that can be set"
 
     !Расчет начальный значений квантовый чисел
     !Перебор идет сверху вниз!
@@ -403,7 +401,7 @@ include "errors.f90"
 
     !Расчет значений промежуточных функций для различных квантовых чисел
     do i=NumRotTrM+1,3*number_atoms
-        do j=1,20
+        do j=1,20 
           UnMul(i,j)=under_mult(HRFs(i), j-1)
        end do
     end do
@@ -438,14 +436,13 @@ include "errors.f90"
            do k=NumRotTrM+1,nm
 		mask4n=mask
 		mask4n(k)=0.0
-		del_w2=sqrt(sum(HRFs(NumRotTrM+1:nm)*(omega(NumRotTrM+1:nm)**2)*(2*nbe(NumRotTrM+1:nm)+1)*&
+		del_w2=sqrt(sum(HRFs(NumRotTrM+1:nm)*(omega(NumRotTrM+1:nm)**2)*(2*nbe(NumRotTrM+1:nm)+1.0)*&
 			mask4n(NumRotTrM+1:nm)))
 		Er=sum(HRFs(NumRotTrM+1:nm)*omega(NumRotTrM+1:nm)*mask4n(NumRotTrM+1:nm))
 		Evib=sum(n(NumRotTrM+1:nm)*Omega(NumRotTrM+1:nm)*mask4n(NumRotTrM+1:nm))
 	        if (mask3(k)>0) then
 			resultval=0.0
-			Vsum2add=(SV(k)**2)*omega(k)**(FCF(n, NumRotTrM, nm,mask4)**2)*&
-				exp(-((Eif-Evib-Er)**2)/(2.0*(del_w2**2)))
+			Vsum2add=(SV(k)**2)*omega(k)*exp(-((Eif-Evib-Er)**2)/(2.0*(del_w2**2)))/del_w2
 			Vsum=Vsum+Vsum2add
 			print *, k, Vsum2add
                 end if
@@ -453,28 +450,38 @@ include "errors.f90"
 	elseif (TypeOfDOS==1) then
              	do k=NumRotTrM+1,nm
 	        	if (mask3(k)>0) then
-				resultval=0.0
-				HRFsm=HRFs; HRFsm(k)=0.0
-	    			omegam=omega; omegam(k)=0.0
-	        		nbem=nbe; nbem(k)=0.0
-				wr=real(wn_c(eif-omega(k),w0,sigma0,sigma0s,sigma1,sigma1s,0))
-				wi=aimag(wn_c(eif-omega(k),w0,sigma0,sigma0s,sigma1,sigma1s,0))
-				g1c=cmplx(1.0,1.0)
-				if (Eif-omega(k)>0.0) then 
-					do while (abs(g1c)>0.0001)
-						g1c=g1fun(cmplx(wr,wi),HRFsm,omegam,nbem,Eif-omega(k),&
+				if (Eif-omega(k)>0) then
+					resultval=0.0
+					HRFsm=HRFs; HRFsm(k)=0.0
+	    				omegam=omega; omegam(k)=0.0
+	        			nbem=nbe; nbem(k)=0.0
+					wr=real(wn_c(eif-omega(k),w0,sigma0,sigma0s,sigma1,sigma1s,0))
+					wi=aimag(wn_c(eif-omega(k),w0,sigma0,sigma0s,sigma1,sigma1s,0))
+					g1c=cmplx(1.0,1.0)
+					if (Eif-omega(k)>0.0) then 
+						do while (abs(g1c)>0.0001)
+							g1c=g1fun(cmplx(wr,wi),HRFsm,omegam,nbem,Eif-omega(k),&
+								NumRotTrM,3*number_atoms,mask)
+							g1r=real(g1c)
+							g1i=aimag(g1c)
+							stepC=(abs(g1c)**(1/2))
+							if (stepC>0.01) stepC=0.01
+							wr=wr-stepC*g1r/sqrt(g1r**2.0+g1i**2.0)
+							wi=wi-stepC*g1i/sqrt(g1r**2.0+g1i**2.0)
+						end do
+						resultval=exp(gfun(cmplx(wr,wi),HRFsm,omegam,nbem,Eif-omega(k),NumRotTrM,&
+							3*number_atoms,mask))/g2fun(cmplx(wr,wi),HRFsm,omegam,nbem,Eif-omega(k),&
 							NumRotTrM,3*number_atoms,mask)
-						g1r=real(g1c)
-						g1i=aimag(g1c)
-						stepC=(abs(g1c)**(1/2))
-						if (stepC>0.01) stepC=0.01
-						wr=wr-stepC*g1r/sqrt(g1r**2.0+g1i**2.0)
-						wi=wi-stepC*g1i/sqrt(g1r**2.0+g1i**2.0)
-					end do
-					resultval=exp(gfun(cmplx(wr,wi),&
-						HRFsm,omegam,nbem,Eif-omega(k),NumRotTrM,3*number_atoms,mask))/&
-					        g2fun(cmplx(wr,wi),HRFsm,omegam,nbem,Eif-omega(k),NumRotTrM,3*number_atoms,mask)
-				end if
+					end if
+				else
+					mask4n=mask
+					mask4n(k)=0.0
+					del_w2=sqrt(sum(HRFs(NumRotTrM+1:nm)*(omega(NumRotTrM+1:nm)**2)*&
+						(2*nbe(NumRotTrM+1:nm)+1.0)*mask4n(NumRotTrM+1:nm)))
+					Er=sum(HRFs(NumRotTrM+1:nm)*omega(NumRotTrM+1:nm)*mask4n(NumRotTrM+1:nm))
+					Evib=sum(n(NumRotTrM+1:nm)*Omega(NumRotTrM+1:nm)*mask4n(NumRotTrM+1:nm))
+					resultval=exp(-((Eif-Evib-Er)**2)/(2.0*(del_w2**2)))/del_w2
+				endif
 				Vsum=Vsum+(SV(k)**2)*omega(k)*resultval
 				print *, k, real((SV(k)**2)*omega(k)*resultval)
                 	end if
@@ -495,31 +502,41 @@ include "errors.f90"
 		elseif (TypeOfDOS==3) then
 		
 	     		do  j=NumRotTrM+1,nm
-			if (mask5(j)>0) then
 				Vsum1=0.0
 				do  v=j+1,nm
-				if (mask5(v)>0) then
 					HRFsm=HRFs; HRFsm(j)=0.0; HRFsm(v)=0.0
 					omegam=omega; omegam(j)=0.0; omegam(v)=0.0
 					nbem=nbe; nbem(j)=0.0; nbem(v)=0.0
 					Vsum2=0.0; Vsum2add=0.0
-					nj=0
-					do while ((nj<2) .or. (Vsum2add>0.001*cutoff2*Vsum2))
+					if (HRFs(j)<cutoff) then
+						minj=1; maxj=1; nj=1
+					elseif (HRFs(j)<10.0) then
+						minj=0; maxj=20; nj=0
+					else
+						minj=20; maxj=20; nj=0
+					endif
+					do while (((nj<2) .or. (Vsum2add>0.001*cutoff2*Vsum2)) .and. ((minj<=nj) .and. (nj<=maxj)))
 						Vsum3=0.0; Vsum3add=0.0
-						nv=0
-						do while ((nv<2) .or. (Vsum3add>0.001*cutoff2*Vsum3))
+						if (HRFs(v)<cutoff) then
+							minv=1; maxv=1; nv=1
+						elseif (HRFs(v)<10.0) then
+							minv=0; maxv=20; nv=0
+						else
+							minv=20; maxv=20; nv=0
+						endif
+						do while (((nv<2) .or. (Vsum3add>0.001*cutoff2*Vsum3)) .and. ((minv<=nv) .and. (nv<=maxv)))
 							mask4n=mask
 							mask4n(j)=0.0; mask4n(v)=0.0
 							del_w2=sqrt(sum(HRFs(NumRotTrM+1:nm)*(omega(NumRotTrM+1:nm)**2)*(2*nbe(NumRotTrM+1:nm)+1)*&
 									mask4n(NumRotTrM+1:nm)))
 							Er=sum(HRFs(NumRotTrM+1:nm)*omega(NumRotTrM+1:nm)*mask4n(NumRotTrM+1:nm))
-							Vsum3add=((UnMul(j,nj+1)*UnMul(v,nv+1))**2)*&
+							Vsum3add=abs(nv-HRFs(v))*(HRFs(v)**(nv-1))*sqrt(HRFs(v))*&
 								exp(-((Eif-omega(j)*nj-omega(v)*nv-Er)**2)/&
-								(2.0*(del_w2**2)))
+								(2.0*(del_w2**2)))/(del_w2*difact(nv))
 							Vsum3=Vsum3+Vsum3add
 							nv=nv+1
 						enddo
-						Vsum2add=abs(nj-HRFs(j))*(HRFs(j)**(nj-1))*sqrt(HRFs(j))*Vsum3/difact(nj)
+						Vsum2add=abs(nj-HRFs(j))*(HRFs(j)**(nj-1))*sqrt(HRFs(j))*Vsum3/difact(nj) 
 						if (Vsum2add<0.0) then
 							print *, "Vsum2add", abs(nj-HRFs(j)),(HRFs(j)**(nj-1)),sqrt(HRFs(j))
 							print *,  j, v, nj, nv, resultval,difact(nj)
@@ -530,22 +547,25 @@ include "errors.f90"
 						print *, j, j, Vsum2add
 					enddo
 					Vsum1=Vsum1+SV(v)*sqrt(omega(v))*exp(-HRFs(v))*Vsum2
-				endif
 				enddo
 				Vsum=Vsum+SV(j)*sqrt(omega(j))*exp(-HRFs(j))*Vsum1
-			endif
 	     		enddo
 
 			Vsum=2*Vsum
 
 			do  j=NumRotTrM+1,nm
-			if (mask5(j)>0) then
 				Vsum2=0.0; Vsum2add=0.0
-				nj=0
+				if (HRFs(j)<cutoff) then
+					minj=1; maxj=1; nj=1
+				elseif (HRFs(j)<10.0) then
+					minj=0; maxj=20; nj=0
+				else
+					minj=20; maxj=20; nj=0
+				endif
 				HRFsm=HRFs; HRFsm(j)=0.0
 				omegam=omega; omegam(j)=0.0
 				nbem=nbe; nbem(j)=0.0
-				do while ((nj<2) .or. (Vsum2add>0.001*cutoff2*Vsum2))
+				do while (((nj<2) .or. (Vsum2add>0.001*cutoff2*Vsum2)) .and. ((minj<=nj) .and. (nj<=maxj)))
 					mask4n=mask; mask4n(j)=0.0
 					del_w2=sqrt(sum(HRFs(NumRotTrM+1:nm)*(omega(NumRotTrM+1:nm)**2)*(2*nbe(NumRotTrM+1:nm)+1)*&
 					mask4n(NumRotTrM+1:nm)))
@@ -556,24 +576,33 @@ include "errors.f90"
 				end do
 				Vsum=Vsum+(SV(j)**2)*omega(j)*exp(-HRFs(j))*Vsum2
 				print *, j, j, (SV(j)**2)*omega(j)*exp(-HRFs(j))*Vsum2
-			endif
 	     		end do
 			
 		elseif (TypeOfDOS==1) then
 	     		do  j=NumRotTrM+1,nm
-			if (mask5(j)>0) then
 				Vsum1=0.0
 				do  v=j+1,nm
-				if (mask5(v)>0) then
 					HRFsm=HRFs; HRFsm(j)=0.0; HRFsm(v)=0.0
 					omegam=omega; omegam(j)=0.0; omegam(v)=0.0
 					nbem=nbe; nbem(j)=0.0; nbem(v)=0.0
 					Vsum2=0.0; Vsum2add=0.0
-					nj=0
-					do while ((nj<2) .or. (Vsum2add>0.001*cutoff2*Vsum2))
+					if (HRFs(j)<cutoff) then
+						minj=1; maxj=1; nj=1
+					elseif (HRFs(j)<10.0) then
+						minj=0; maxj=20; nj=0
+					else
+						minj=20; maxj=20; nj=0
+					endif
+					do while (((nj<2) .or. (Vsum2add>0.001*cutoff2*Vsum2)) .and. ((minj<=nj) .and. (nj<=maxj)))
 						Vsum3=0.0; Vsum3add=0.0
-						nv=0
-						do while ((nv<2) .or. (Vsum3add>0.001*cutoff2*Vsum3))
+						if (HRFs(v)<cutoff) then
+							minv=1; maxv=1; nv=1
+						elseif (HRFs(v)<10.0) then
+							minv=0; maxv=20; nv=0
+						else
+							minv=20; maxv=20; nv=0
+						endif
+						do while (((nv<2) .or. (Vsum3add>0.001*cutoff2*Vsum3)) .and. ((minv<=nv) .and. (nv<=maxv)))
 							stepC=0.01
 							if (eif-omega(j)*nj-omega(v)*nv>0.0) then
 								wr=real(wn_c(eif-omega(j)*nj-omega(v)*nv,w0,&
@@ -599,19 +628,19 @@ include "errors.f90"
 									(sqrt(abs(g2v))*difact(nv))
 								Vsum3=Vsum3+Vsum3add
 								if (Vsum3add<0.0) then
-									print *, "Vsum3add",abs(nv-HRFs(v)),HRFs(v)**(nv-1),sqrt(HRFs(v)),sqrt(HRFs(v))
-									print *,  j, v, nj, nv, resultval,difact(nv)
-									stop
+								print *, "Vsum3add",abs(nv-HRFs(v)),HRFs(v)**(nv-1),sqrt(HRFs(v)),sqrt(HRFs(v))
+								print *,  j, v, nj, nv, resultval,difact(nv)
+								stop
 								end if
 							else
 								mask4n=mask
 								mask4n(j)=0.0; mask4n(v)=0.0
-								del_w2=sqrt(sum(HRFs(NumRotTrM+1:nm)*(omega(NumRotTrM+1:nm)**2)*(2*nbe(NumRotTrM+1:nm)+1)*&
-									mask4n(NumRotTrM+1:nm)))
+								del_w2=sqrt(sum(HRFs(NumRotTrM+1:nm)*(omega(NumRotTrM+1:nm)**2)*&
+									(2*nbe(NumRotTrM+1:nm)+1)*mask4n(NumRotTrM+1:nm)))
 								Er=sum(HRFs(NumRotTrM+1:nm)*omega(NumRotTrM+1:nm)*mask4n(NumRotTrM+1:nm))
-								Vsum3add=((UnMul(j,nj+1)*UnMul(v,nv+1))**2)*&
-									exp(-((Eif-omega(j)*nj-omega(v)*nv-Er)**2)/&
-									(2.0*(del_w**2)))
+								Vsum3add=abs(nv-HRFs(v))*(HRFs(v)**(nv-1))*sqrt(HRFs(v))*&
+								exp(-((Eif-omega(j)*nj-omega(v)*nv-Er)**2)/&
+								(2.0*(del_w2**2)))/(del_w2*difact(nv))
 								Vsum3=Vsum3+Vsum3add
 							end if
 							nv=nv+1
@@ -627,22 +656,25 @@ include "errors.f90"
 					enddo
 					Vsum1=Vsum1+SV(v)*sqrt(omega(v))*exp(-HRFs(v))*Vsum2
 					print *, j, v, SV(v)*sqrt(omega(v))*exp(-HRFs(v))*Vsum2
-				endif
 				enddo
 				Vsum=Vsum+SV(j)*sqrt(omega(j))*exp(-HRFs(j))*Vsum1
-	     		endif
 			enddo
 			
 			Vsum=2*Vsum
 			
 			do  j=NumRotTrM+1,nm
-			if (mask5(j)>0) then
 				Vsum2=0.0; Vsum2add=0.0
-				nj=0
+				if (HRFs(j)<cutoff) then
+					minj=1; maxj=1; nj=1
+				elseif (HRFs(j)<10.0) then
+					minj=0; maxj=20; nj=0
+				else
+					minj=20; maxj=20; nj=0
+				endif
 				HRFsm=HRFs; HRFsm(j)=0.0
 				omegam=omega; omegam(j)=0.0
 				nbem=nbe; nbem(j)=0.0
-				do while ((nj<2) .or. (Vsum2add>0.001*cutoff2*Vsum2))
+				do while (((nj<2) .or. (Vsum2add>0.001*cutoff2*Vsum2)) .and. ((minj<=nj) .and. (nj<=maxj)))
 					stepC=0.01
 					if (eif-omega(j)*nj>0.0) then
 						wr=real(wn_c(eif-omega(j)*nj,w0,sigma0,sigma0s,sigma1,sigma1s,0))
@@ -672,7 +704,6 @@ include "errors.f90"
 				end do
 				Vsum=Vsum+(SV(j)**2)*omega(j)*exp(-HRFs(j))*Vsum2
 				print *, j, j, (SV(j)**2)*omega(j)*exp(-HRFs(j))*Vsum2
-			endif
 	     		enddo
 			
 		endif
@@ -685,7 +716,7 @@ include "errors.f90"
 		!Цикл в котором происходит перебор квантовых чисел
        		do while (.not. EndCycle)
         		Evib=sum(n(NumRotTrM+1:nm)*Omega(NumRotTrM+1:nm)*mask4(NumRotTrM+1:nm))
-       		 	if (Eif-delta<=Evib) then   
+       		 	if ((Eif-delta<=Evib) .and. (0.0<=Evib)) then   
              			!Вклад рассчитывается только в том случае, если энергии уровня попадает в разрешенный диапазон
              			FCF_value=FCF_value+(FCF(n, NumRotTrM, nm,mask4)**2)*exp(-((Eif-Evib-Er)**2)/(2.0*(del_w**2)))
           		end if
@@ -709,13 +740,13 @@ include "errors.f90"
                    				targetcc=targetcc-1
                 			end do
                 			Evib=sum(n(NumRotTrM+1:nm)*Omega(NumRotTrM+1:nm)) 
-                			if (Evib<Eif-delta) then !Если энергия состояния ниже предела, то перейти к стартовому КЧ
+                			if ((Evib<Eif-delta) .or. (0.0<Evib)) then !Если энергия состояния ниже предела, то перейти к стартовому КЧ
 		   				targetc=NumRotTrM+1
                 			else
                    				flag=.true. !В противном случае выйти из цикла
                 			end if
              			end if
-	     			if ((n(mmn)<nmin(mmn)) .or. (n(nm+1)<0)) then !Последнее значащае КЧ опустилось ниже минимума
+	     			if ((n(mmn)<nmin(mmn)) .or. (n(nm+1)<0)) then !Последнее значащее КЧ опустилось ниже минимума
                 			flag=.true.!Законцить перебор КЧ
                 			EndCycle=.true.
              			end if
@@ -725,12 +756,11 @@ include "errors.f90"
 	else if (TypeOfDOS==1) then
 		stepC=0.1
 		resultval=0.0
-		wr=real(wn_c(eif-omega(j)*nj-omega(v)*nv,w0,sigma0,sigma0s,sigma1,sigma1s,0))
-		wi=aimag(wn_c(eif-omega(j)*nj-omega(v)*nv,w0,sigma0,sigma0s,sigma1,sigma1s,0))
+		wr=real(wn_c(eif,w0,sigma0,sigma0s,sigma1,sigma1s,0))
+		wi=aimag(wn_c(eif,w0,sigma0,sigma0s,sigma1,sigma1s,0))
 		g1c=cmplx(1.0,1.0)
 		do while (abs(g1c)>0.0001)
-			g1c=g1fun(cmplx(wr,wi),HRFs,omega,nbe,Eif-omega(j)*nj-omega(v)*nv,&
-				NumRotTrM,3*number_atoms,mask)
+			g1c=g1fun(cmplx(wr,wi),HRFs,omega,nbe,Eif,NumRotTrM,3*number_atoms,mask)
 			g1r=real(g1c)
 			g1i=aimag(g1c)
 			stepC=sqrt(abs(g1c)**(1/2))
@@ -738,9 +768,9 @@ include "errors.f90"
 			wr=wr-stepC*g1r/sqrt(g1r**2.0+g1i**2.0)
 			wi=wi-stepC*g1i/sqrt(g1r**2.0+g1i**2.0)
 		end do
-		resultval=real(exp(gfun(cmplx(wr,wi),HRFs,omega,nbe,Eif-omega(j)*nj-omega(v)*nv,&
+		resultval=real(exp(gfun(cmplx(wr,wi),HRFs,omega,nbe,Eif,&
 			NumRotTrM,3*number_atoms,mask)))/sqrt(abs(g2fun(cmplx(wr,wi),&
-			HRFs,omega,nbe,Eif-omega(j)*nj-omega(v)*nv,NumRotTrM,3*number_atoms,mask)))
+			HRFs,omega,nbe,Eif,NumRotTrM,3*number_atoms,mask)))
 	end if
 
        !Конец расчета ISC
@@ -767,7 +797,7 @@ include "errors.f90"
 		!Цикл в котором происходит перебор квантовых чисел
        		do while (.not. EndCycle)
         		Evib=sum(n(NumRotTrM+1:nm)*Omega(NumRotTrM+1:nm)*mask4(NumRotTrM+1:nm))
-       		 	if (Eif-delta<=Evib) then   
+       		 	if ((Eif-delta<=Evib) .and. (0.0<=Evib)) then   
              			!Вклад рассчитывается только в том случае, если энергии уровня попадает в разрешенный диапазон
              			FCF_value=FCF_value+(FCF(n, NumRotTrM, nm,mask4)**2)*exp(-((Eif-Evib-Er)**2)/(2.0*(del_w**2)))
           		end if
@@ -791,7 +821,7 @@ include "errors.f90"
                    				targetcc=targetcc-1
                 			end do
                 			Evib=sum(n(NumRotTrM+1:nm)*Omega(NumRotTrM+1:nm)) 
-                			if (Evib<Eif-delta) then !Если энергия состояния ниже предела, то перейти к стартовому КЧ
+                			if ((Evib<Eif-delta) .or. (Evib<0.0)) then !Если энергия состояния ниже предела, то перейти к стартовому КЧ
 		   				targetc=NumRotTrM+1
                 			else
                    				flag=.true. !В противном случае выйти из цикла
@@ -807,15 +837,11 @@ include "errors.f90"
 	else if (TypeOfDOS==1) then
 		stepC=0.1
 		resultval=0.0
-		!HRFsm=HRFs; HRFsm(j)=0.0; HRFsm(v)=0.0
-		!omegam=omega; omegam(j)=0.0; omegam(v)=0.0
-		!nbem=nbe; nbem(j)=0.0; nbem(v)=0.0
-		wr=real(wn_c(eif-omega(j)*nj-omega(v)*nv,w0,sigma0,sigma0s,sigma1,sigma1s,0))
-		wi=aimag(wn_c(eif-omega(j)*nj-omega(v)*nv,w0,sigma0,sigma0s,sigma1,sigma1s,0))
+		wr=real(wn_c(eif,w0,sigma0,sigma0s,sigma1,sigma1s,0))
+		wi=aimag(wn_c(eif,w0,sigma0,sigma0s,sigma1,sigma1s,0))
 		g1c=cmplx(1.0,1.0)
 		do while (abs(g1c)>0.0001)
-			g1c=g1fun(cmplx(wr,wi),HRFs,omega,nbe,Eif-omega(j)*nj-omega(v)*nv,&
-				NumRotTrM,3*number_atoms,mask)
+			g1c=g1fun(cmplx(wr,wi),HRFs,omega,nbe,Eif,NumRotTrM,3*number_atoms,mask)
 			g1r=real(g1c)
 			g1i=aimag(g1c)
 			stepC=sqrt(abs(g1c)**(1/2))
@@ -823,9 +849,9 @@ include "errors.f90"
 			wr=wr-stepC*g1r/sqrt(g1r**2.0+g1i**2.0)
 			wi=wi-stepC*g1i/sqrt(g1r**2.0+g1i**2.0)
 		end do
-		resultval=real(exp(gfun(cmplx(wr,wi),HRFs,omega,nbe,Eif-omega(j)*nj-omega(v)*nv,&
+		resultval=real(exp(gfun(cmplx(wr,wi),HRFs,omega,nbe,Eif,&
 			NumRotTrM,3*number_atoms,mask)))/sqrt(abs(g2fun(cmplx(wr,wi),&
-			HRFs,omega,nbe,Eif-omega(j)*nj-omega(v)*nv,NumRotTrM,3*number_atoms,mask)))
+			HRFs,omega,nbe,Eif,NumRotTrM,3*number_atoms,mask)))
 		end if
 		print *, Eif, real(resultval/sqrt(2*pi)) 
 	enddo
@@ -835,6 +861,7 @@ include "errors.f90"
 !********************************************
 !  Блок выдачи результатов
 !********************************************
+    if (res_mode/=3) then
     print *, "---------------------------------------------------------------------------"
     print *, "                         FINISH RESULT                                     "
     print *, "---------------------------------------------------------------------------"
@@ -851,4 +878,5 @@ include "errors.f90"
     end if
     write (constwrite, "(Es10.3E2)") (finish_time-start_time)
     print *, "Time: "//trim(ADJUSTL(constwrite))//" sec"
+    endif
     end program NATRC
