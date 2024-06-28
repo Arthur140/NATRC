@@ -77,7 +77,7 @@ function FCF(P_n, NMRT, nm,mask)
 			FCF=FCF*UnMul(k,P_n(k)+1)
 		end if
 	end do
-	!FCF=product(P_Mu(NMRT+1:nm))
+	FCF=product(P_Mu(NMRT+1:nm))
 	return
 end function FCF
 
@@ -86,8 +86,6 @@ function wn_c(wl,w0,s0,s0s,s1,s1s,n)
 	complex(4)::wn_c
 	real(4)::A,B,C,wl,w0,s0,s0s,s1,s1s,z
 	integer(4)::n
-	!z=wl/(w0*sqrt(s0*s0s))
-	!A=(1.0+s1/(w0*s0))*(log(z+sqrt(z**2+1.0))-log(s0/s0s)/2.0)/w0
 	z=wl/(w0*s0)
 	A=(1.0+s1/(w0*s0))*log(z+sqrt(z**2+(s0s/s0)))/w0
 	B=(1.0+s1/(w0*s0))/w0
@@ -253,7 +251,6 @@ subroutine found_area(HRFs,omega,NMRT,nm, cutoff)
 		k=1
 		do !Поиск максимального значения КЧ, при котором значение функции меньше чем максимального на cutoff
 			if (sec_func(max_loc1+k,HRFs(i),omega(i))<=cutoff*max_val1) exit
-			!print *, sec_func(max_loc1+k,HRFs(i),omega(i)), cutoff*max_val1
 			k=k+1 
 		end do
 		nmaxc(i)=max_loc1+k !Максимальное значение КЧ для i-ой моды
@@ -284,7 +281,6 @@ function rotate_molecula(coord_rot,coord_ref,numbers_of_atoms,mass,apar)
 	!Поиск самого тяжелого атома
 	do i=1,numbers_of_atoms
 		atom_pos(i)=i
-		!print *, mass(3*(i-1)+1), coord_ref(3*(i-1)+1), coord_ref(3*(i-1)+2), coord_ref(3*(i-1)+3)
 	end do
 	mass_of_atoms(1:numbers_of_atoms)=mass(1:numbers_of_atoms:3)
 	do i=1,numbers_of_atoms
