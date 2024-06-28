@@ -15,6 +15,7 @@ module phys_constants
 	real(4)::Hsoc=0.0 !Константа спин-орбитального взаимодействия
 	logical(4)::symmetry=.false. !Флаг учета симметрии при рассчете IC скорости
 	logical(4)::RateCalc=.true. !Выбор того будут рассчитваться скорости или строится функция плотности спектра
+	logical(4)::naccalc=.false. !Флаг расчета NACME на основе электронных интегралов
 	real(4)::MinEnergyRange !Нижняя граница диапазона, в котором строится график скорости
 	real(4)::MaxEnergyRange !Верхняя граница диапазона, в котором строится график скорости
 	real(4)::StepEnergyRange !Шаг энергии между двумя точками на графике
@@ -23,6 +24,9 @@ module phys_constants
 	real(4):: ThresholdHRF=0.01 !Пороговое значения фактора Хуанга-Риса для гибридного метода 
 	integer(4)::res_mode=1 !Режим, в котором будет проходить рассчет 1 - IC, 2 - ISC, 3 - DOS
 	logical(4)::total_symmetry=.false. !Переход полносимметричный
+        real(4)::Esolv=0.0 !Разница энергий сольватации 
+	real(4)::Wdebye=0.0 !Частота Дебая в Хартрии
+	real(4)::Eifver=0.0 !Вертикальная разность энергий между состояниями
 end module phys_constants
 
 !Функция HuangRhys расчитывает факторы Хуана-Риса
@@ -92,40 +96,54 @@ function wn_c(wl,w0,s0,s0s,s1,s1s,n)
 	return
 end function wn_c
 
-function gfun(wn_c,HRFs,omega,nbe,Eif,NMRT,nm,mask)
+function gfun(wn_c,HRFs,omega,nbe,Eif2,NMRT,nm,mask)
+	use phys_constants
 	complex(4)::gfun,wn_c
-	real(4)::HRFs(3000),omega(3000),Eif, nbe(3000)
+	real(4)::HRFs(3000),omega(3000),Eif2, nbe(3000)
 	integer(4)::i, mask(3000)
-	gfun=-wn_c*Eif
+	gfun=-wn_c*Eif2
 	do i=NMRT+1,nm
 		gfun=gfun+HRFs(i)*mask(i)*&
 		((nbe(i)+1.0)*exp(wn_c*omega(i))+nbe(i)*exp(-wn_c*omega(i))-2*nbe(i)-1.0)
 	end do
+	if (wDebye/=0.0) then
+		gfun=gfun-2*kT*Esolv*(exp(-cmplx(0,1)*wn_c*wDebye)+cmplx(0,1)*wn_c*wDebye-1.0)/&
+		wDebye**2.0-cmplx(0,1)*Esolv*(1.0-exp(-cmplx(0,1)*wn_c*wDebye))/wDebye
+	endif
 	return
 end function gfun
 
-function g1fun(wn_c,HRFs,omega,nbe,Eif,NMRT,nm,mask)
+function g1fun(wn_c,HRFs,omega,nbe,Eif2,NMRT,nm,mask)
+	use phys_constants
 	complex(4)::g1fun,wn_c
-	real(4)::HRFs(3000),omega(3000),Eif, nbe(3000)
+	real(4)::HRFs(3000),omega(3000),Eif2, nbe(3000)
 	integer(4)::i,mask(3000)
-	g1fun=-Eif
+	g1fun=-Eif2
 	do i=NMRT+1,nm
 		g1fun=g1fun+HRFs(i)*omega(i)*mask(i)*&
 		((nbe(i)+1.0)*exp(wn_c*omega(i))-nbe(i)*exp(-wn_c*omega(i)))
-
 	end do
+	if (wDebye/=0.0) then
+		g1fun=g1fun+2*kT*Esolv*cmplx(0,1)*(exp(-cmplx(0,1)*wn_c*wDebye)-&
+		1.0)/wDebye+Esolv*exp(-cmplx(0,1)*wn_c*wDebye)
+	endif
 	return
 end function g1fun
 
-function g2fun(wn_c,HRFs,omega,nbe,Eif,NMRT,nm,mask)
+function g2fun(wn_c,HRFs,omega,nbe,Eif2,NMRT,nm,mask)
+	use phys_constants
 	complex(4)::g2fun,wn_c
-	real(4)::HRFs(3000),omega(3000),Eif, nbe(3000)
+	real(4)::HRFs(3000),omega(3000),Eif2, nbe(3000)
 	integer(4)::i,mask(3000)
 	g2fun=0.0
 	do i=NMRT+1,nm
 		g2fun=g2fun+HRFs(i)*(omega(i)**2)*mask(i)*&
 		((nbe(i)+1.0)*exp(wn_c*omega(i))+nbe(i)*exp(-wn_c*omega(i)))
 	end do
+	if (wDebye/=0.0) then
+		g2fun=g2fun+2*kT*Esolv*exp(-cmplx(0,1)*wDebye*wn_c)-&
+		cmplx(0,1)*wDebye*Esolv*exp(-cmplx(0,1)*wDebye*wn_c)
+	endif
 	return
 end function g2fun
 
@@ -163,7 +181,7 @@ function first_func(n,y)
           		integer, intent(in) :: n 
        		end 
 	end interface
-	if ((n>=0) .and. (y>=0.0)) then
+	if ((n>=0) .and. (y>=0.0) .or. (difact(n)-1 .eq. difact(n))) then
 		first_func=sqrt((y**real(n))*exp(-y)/difact(n))
 	else
 		first_func=0.0
@@ -185,7 +203,7 @@ function sec_func(n,y,w)
           		integer, intent(in) :: n 
        		end 
 	end interface
-	if (((y==0.0) .and. (n==0)) .or. (y<0.0) .or. (n<0)) then
+	if (((y==0.0) .and. (n==0)) .or. (y<0.0) .or. (n<0) .or. (difact(n)-1 .eq. difact(n))) then
 		sec_func=0.0
 	else
 		sec_func=sqrt(w*((real(n)-y)**2.0)*(y**real(n-1))*exp(-y)/(2*difact(n)))
@@ -234,7 +252,8 @@ subroutine found_area(HRFs,omega,NMRT,nm, cutoff)
 		max_val1=maxval(vec1(1:diap))   !Значение правого максимума
 		k=1
 		do !Поиск максимального значения КЧ, при котором значение функции меньше чем максимального на cutoff
-			if (sec_func(max_loc1+k,HRFs(i),omega(i))<cutoff*max_val1) exit
+			if (sec_func(max_loc1+k,HRFs(i),omega(i))<=cutoff*max_val1) exit
+			!print *, sec_func(max_loc1+k,HRFs(i),omega(i)), cutoff*max_val1
 			k=k+1 
 		end do
 		nmaxc(i)=max_loc1+k !Максимальное значение КЧ для i-ой моды
@@ -243,7 +262,7 @@ subroutine found_area(HRFs,omega,NMRT,nm, cutoff)
 		max_val2=maxval(vec2(1:diap)) !Значение левого максимума
 		k=1
 		do while (max_loc2-k>0) !Поиск минимального значения КЧ,  при котором значение функции меньше чем максимального на cutoff
-			if (sec_func(max_loc2-k,HRFs(i),omega(i))<cutoff*max_val2) exit
+			if (sec_func(max_loc2-k,HRFs(i),omega(i))<=cutoff*max_val2) exit
 			k=k+1
 		end do
 		nminc(i)=max_loc2-k !Максимальное значение КЧ для i-ой моды
@@ -415,7 +434,7 @@ function rotate_molecula(coord_rot,coord_ref,numbers_of_atoms,mass,apar)
 	axy=1.0
 	ayz=1.0
 	azx=1.0
-	do while (abs(axy)+abs(ayz)+abs(azx)>0.00000001)
+	do while (abs(axy)+abs(ayz)+abs(azx)>0.0000001)
 	!Поворот вокруг оси z	
 	high=sum((coord_rot(1:nm:3)*coord_ref(2:nm:3)-coord_rot(2:nm:3)*coord_ref(1:nm:3))*mass(1:nm:3))
     	low=sum((coord_rot(1:nm:3)*coord_ref(1:nm:3)+coord_rot(2:nm:3)*coord_ref(2:nm:3))*mass(1:nm:3))

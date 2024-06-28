@@ -5,13 +5,13 @@
 !param[out] number_atoms::integer(4) Число атомов в молекуле
 subroutine read_coord(filename,fistate)
     integer(kind=1):: action, IOS=0
-    integer(4):: k, number_atoms, fistate, sizes
+    integer(4):: k, number_atoms, fistate, sizes, charges(3000)
     character (LEN =80) STRING
     character (LEN =10) atom_label, labels(3000)
     character (LEN =*) filename
     real(4):: a,b,c,d, coord(3,3000), nacme(10,10,3000)
     logical file_exists
-    common/nacme/ coord, nacme, number_atoms, labels
+    common/nacme/ coord, nacme, number_atoms, labels, charges
     INQUIRE(FILE=filename, EXIST=file_exists, size=sizes)
     if (.not. file_exists) call write_error(2,1,filename) !Проверка наличия файла
     if (sizes==0) call write_error(2,2,filename) !Проверка пустоты файла
@@ -37,7 +37,8 @@ subroutine read_coord(filename,fistate)
         if (atom_label=="") exit
 	write (*, '(A10,F6.1,F20.10,F20.10,F20.10)') atom_label, a, b, c, d
         coord(fistate,k)=b; coord(fistate,k+1)=c; coord(fistate,k+2)=d 
-	labels(k:k+2)=atom_label          
+	charges(k:k+2)=int(a)
+	labels(k:k+2)=atom_label       
         k=k+3
     end do
     if (k>3000) then
@@ -48,6 +49,7 @@ subroutine read_coord(filename,fistate)
         !Ошибка: больше 1000 атомов
     end if
     number_atoms=(k-1)/3
+	!print *, number_atoms
     if (number_atoms==0) call write_error(1,14,"")
     close(3)
 end subroutine read_coord
@@ -61,13 +63,14 @@ end subroutine read_coord
 !param[out] number_atoms::integer(4) Число атомов в молекуле
 subroutine read_nacme(filename, number_states, fistate)
     integer(kind=1):: action, IOS=0, s=0
-    integer(4):: k, i, j, e, number_atoms, number_states, fistate, sizes
+    integer(4):: k, i, j, e, number_atoms, number_states, fistate, sizes, charges(3000)
     character (LEN =80) STRING
-    character (LEN =10) atom_label, labels(3000)
+    character (LEN =10) atom_label,  labels(3000)
+    character (len =20) label_damp
     character (LEN =*) filename
     logical file_exists
     real(4):: a,b,c,d, coord(3,3000), nacme(10,10,3000)
-    common/nacme/ coord, nacme, number_atoms, labels
+    common/nacme/ coord, nacme, number_atoms, labels, charges
     INQUIRE(FILE=filename, EXIST=file_exists, size=sizes)
     if (.not. file_exists) call write_error(2,1,filename) !Проверка наличия файла
     if (sizes==0) call write_error(2,2,filename) !Проверка пустоты файла
@@ -102,6 +105,7 @@ subroutine read_nacme(filename, number_states, fistate)
     end if
     number_atoms=(k-1)/3 !Число атомов в молекуле
     if (number_atoms==0) call write_error(1,14,"")
+
     do while (STRING/=' NONADIABATIC COUPLING MATRIX ELEMENT (NACME), IN ONE/BOHR')
         read (1, '(A80)' , iostat = IOS) STRING
         if (IOS /=0) call write_error(2,3,filename) !Ошибка: непредвиденный конец файла
@@ -136,6 +140,332 @@ subroutine read_nacme(filename, number_states, fistate)
     close(1)
 end subroutine read_nacme
 
+
+
+
+subroutine read_ef(filename, init_st, fin_st)
+	integer(kind=1):: action, IOS=0, s=0
+	integer(4):: number_atoms, sizes, i, ind1, ind2, sum_calc, init_st, fin_st, charges(3000)
+	character (LEN =10) labels(3000)
+	character (len =20) label_damp
+	character (LEN =*) filename
+	character (LEN =80) STRING
+	logical file_exists, elf_flag(0:10,0:10)
+	real(4):: a,b,c,d, coord(3,3000), nacme(10,10,3000), coord_buf(3000), efl_buf(3000)
+	real(4):: elfield(0:10,0:10,3000)
+	common/nacme/ coord, nacme, number_atoms, labels, charges
+	common/elfc/ elfield, elf_flag
+	INQUIRE(FILE=filename, EXIST=file_exists, size=sizes)
+	open(unit=1, file= filename, iostat=ios)
+	do while (index(STRING, "PROPERTIES FOR THE")*index(STRING, "DENSITY MATRIX")==0)
+        	read (1, '(A80)' , iostat = IOS) STRING
+        	if (IOS /=0) call write_error(2,9,filename) !Ошибка: непредвиденный конец файла
+    	end do
+	 do while (ADJUSTL(trim(STRING))/="ELECTRIC FIELD")
+        	read (1, '(A80)' , iostat = IOS) STRING
+        	if (IOS /=0) call write_error(2,9,filename) !Ошибка: непредвиденный конец файла
+    	end do
+
+	do i=1, 4
+		read (1, '(A80)' , iostat = IOS) STRING
+	end do
+	do i=1,number_atoms
+		do j=1, 5
+			if (j==2) then
+				read (1, '(13X,3F16.6)' , iostat = IOS) &
+				coord_buf(3*(i-1)+1), coord_buf(3*(i-1)+2), coord_buf(3*(i-1)+3)
+			elseif (j==4) then
+				read (1, '(1X,4F16.6)' , iostat = IOS) &
+				efl_buf(3*(i-1)+1), efl_buf(3*(i-1)+2), efl_buf(3*(i-1)+3)
+			else
+				read (1, '(A80)' , iostat = IOS) STRING
+			endif
+		end do
+	end do
+	coord(1,:)=coord_buf(:)
+	elfield(0,0,:)=efl_buf
+	elf_flag(0,0)=.true.
+	
+	do while (IOS==0)
+		do while (index(STRING, "PROPERTIES FOR THE")==0)
+        		read (1, '(A80)' , iostat = IOS) STRING
+        		if (IOS /=0) goto 10
+    		end do
+		read (1, '(A80)' , iostat = IOS) STRING
+        	if (IOS /=0) call write_error(2,9,filename) !Ошибка: непредвиденный конец файла
+		if (index(STRING,"TRANSITION DENSITY BETWEEN") .ne. 0) then
+			read (1, '(A80)' , iostat = IOS) STRING
+        		if (IOS /=0) call write_error(2,9,filename) 
+					!Ошибка: непредвиденный конец файла
+			if (index(STRING,"THE GROUND STATE AND") .ne. 0) then
+				read (string,'(42X,I5)') ind1
+				ind2=0
+			else
+				read (string,'(21X,I4,19X,I5)') ind2, ind1
+			end if
+			if (ind2>ind1) then
+				ind1=ind1+ind2
+				ind2=ind1-ind2
+				ind1=ind1-ind2
+			endif
+		elseif (index(STRING,"USING THE UNRELAXED DENSITY OF EXCITED STATE") &
+			.ne. 0) then
+			read (string,'(52X,I5)') ind1
+			ind2=ind1
+		else
+			call write_error(1,38,filename)
+		endif
+		do while (ADJUSTL(trim(STRING))/="ELECTRIC FIELD")
+        		read (1, '(A80)' , iostat = IOS) STRING
+        		if (IOS /=0) call write_error(2,9,filename) !Ошибка: непредвиденный конец файла
+    		end do
+
+		do i=1, 4
+			read (1, '(A80)' , iostat = IOS) STRING
+		end do
+		do i=1,number_atoms
+			do j=1, 5
+				if (j==2) then
+					read (1, '(13X,3F16.6)' , iostat = IOS) &
+					coord_buf(3*(i-1)+1), coord_buf(3*(i-1)+2), coord_buf(3*(i-1)+3)
+				elseif (j==4) then
+					read (1, '(1X,4F16.6)' , iostat = IOS) &
+					efl_buf(3*(i-1)+1), efl_buf(3*(i-1)+2), efl_buf(3*(i-1)+3)
+				else
+					read (1, '(A80)' , iostat = IOS) STRING
+				endif
+			end do
+		end do
+		elfield(ind1,ind2,:)=efl_buf
+		elf_flag(ind1,ind2)=.true.
+	end do
+
+	
+10	if (.not. elf_flag(init_st-1, fin_st-1)) then
+		print *, "There is not EFL for a need transition"
+		stop
+	endif
+
+	close(1)
+end subroutine read_ef
+
+subroutine read_transit(filename, init_st, fin_st, numAO)
+	integer(kind=1):: action, IOS=0, s=0
+	integer(4):: number_atoms, sizes, i, j, ind1, ind2, sum_calc, init_st, fin_st,str_ind
+	integer(4):: numAO, charges(3000)
+	character (LEN =10) labels(3000)
+	character (len =20) label_damp
+	character (LEN =*) filename
+	character (LEN =80) STRING
+	logical file_exists, elf_flag(0:10,0:10)
+	real(4):: a,b,c,d, coord_buf(3000), efl_buf(3000)
+	real(4):: transden(3000,3000), Trace, coord(3,3000), nacme(10,10,3000)
+	common/nacme/ coord, nacme, number_atoms, labels, charges
+	common/elfc/ elfield, elf_flag
+	INQUIRE(FILE=filename, EXIST=file_exists, size=sizes)
+	open(unit=1, file= filename, iostat=ios)
+	 do while (ADJUSTL(trim(STRING))/="TRANSITION DENSITY MATRIX")
+        	read (1, '(A80)' , iostat = IOS) STRING
+        	if (IOS /=0) call write_error(2,9,filename) !Ошибка: непредвиденный конец файла
+    	end do
+	read (1, '(A80)' , iostat = IOS) STRING
+        if (IOS /=0) call write_error(2,9,filename) !Ошибка: непредвиденный конец файла
+	read (1, '(27X,I3,26X,I3)') fin_st, init_st
+	do i=1,3
+		read (1, '(A80)' , iostat = IOS) STRING
+        	if (IOS /=0) call write_error(2,9,filename) !Ошибка: непредвиденный конец файла
+	enddo
+	do j=0,ceiling(real(numao)/5)-1
+	do i=1, numao
+		read (1, '(I5,2X,5E17.9)', iostat = IOS) str_ind, transden(i,j*5+1), transden(i,j*5+2), &
+		transden(i,j*5+3), transden(i,j*5+4), transden(i,(j+1)*5)
+		if (str_ind==0) then
+			print *,  "Error! Incorect number of AO"; stop
+		endif
+		if (IOS /=0) call write_error(2,9,filename)
+	end do
+	read (1, '(I5)', iostat = IOS) str_ind
+	if (str_ind/=0) then
+		print *,  "Error! Incorect number of AO"; stop 
+	endif
+	do i=1,2
+		read (1, '(A80)' , iostat = IOS) STRING
+        	if (IOS /=0) call write_error(2,9,filename) !Ошибка: непредвиденный конец файла
+	enddo
+	enddo
+	
+	Trace=0.0
+	do i=1,numao
+		trace=trace+transden(i,i)
+	enddo
+	print *, trace
+	
+	stop
+	close (1)
+end subroutine read_transit
+
+subroutine read_densit(filename, init_st, fin_st, numAO)
+	integer(kind=1):: action, IOS=0, s=0
+	integer(4):: number_atoms, sizes, i, j, ind1, ind2, sum_calc, init_st, fin_st,str_ind
+	integer(4):: numAO, lwork, info, charges(3000)
+	character (LEN =10) labels(3000)
+	character (len =20) label_damp
+	character (LEN =*) filename
+	character (LEN =80) STRING
+	logical file_exists, elf_flag(0:10,0:10)
+	real(4):: a,b,c,d, coord_buf(3000), efl_buf(3000)
+	real(4):: transden(3000,3000), Trace, work(8999), coord(3,3000), nacme(10,10,3000)
+	real(8)::dwork(8999) 
+    character(len=10)::let1
+    real(8),allocatable:: dAMHM(:,:),dW(:)
+    real(4),allocatable::AMHM(:,:),W(:)
+	common/nacme/ coord, nacme, number_atoms, labels, charges
+	common/elfc/ elfield, elf_flag
+	external dsyev
+	INQUIRE(FILE=filename, EXIST=file_exists, size=sizes)
+	open(unit=1, file= filename, iostat=ios)
+	 do while (ADJUSTL(trim(STRING))/="DENSITY MATRIX")
+        	read (1, '(A80)' , iostat = IOS) STRING
+        	if (IOS /=0) call write_error(2,9,filename) !Ошибка: непредвиденный конец файла
+    	end do
+	do i=1,4
+		read (1, '(A80)' , iostat = IOS) STRING
+        	if (IOS /=0) call write_error(2,9,filename) !Ошибка: непредвиденный конец файла
+	enddo
+	do j=0,ceiling(real(numao)/5)-1
+	do i=1, numao
+		read (1, '(I5,2X,5E17.9)', iostat = IOS) str_ind, transden(i,j*5+1), transden(i,j*5+2), &
+		transden(i,j*5+3), transden(i,j*5+4), transden(i,(j+1)*5)
+		if (str_ind==0) then
+			print *,  "Error! Incorect number of AO"; stop
+		endif
+		if (IOS /=0) call write_error(2,9,filename)
+	end do
+	read (1, '(I5)', iostat = IOS) str_ind
+	if (str_ind/=0) then
+		print *,  "Error! Incorect number of AO"; stop 
+	endif
+	do i=1,2
+		read (1, '(A80)' , iostat = IOS) STRING
+        	if (IOS /=0) call write_error(2,9,filename) !Ошибка: непредвиденный конец файла
+	enddo
+	enddo
+	
+	Trace=0.0
+	do i=1,numao
+		trace=trace+transden(i,i)
+	enddo
+    print *, trace
+    allocate(W(numao))
+    allocate(dW(numao))
+    allocate(AMHM(numao,numao))
+    allocate(dAMHM(numao,numao))
+	AMHM(1:numao,1:numao)=transden(1:numao,1:numao)
+    dAMHM=dble(AMHM)
+    lwork = -1
+    call dsyev( 'Vectors', 'Upper', numao, dAMHM, numao, dW, dwork, lwork, info )
+    lwork = min( 8999, int( dwork( 1 ) ) )
+!   Solve eigenproblem.
+    call dsyev( 'Vectors', 'Upper', numao, dAMHM, numao, dW, dwork, lwork, info )
+    
+	W=real(dW)
+	Trace=0.0
+	do i=1,numao
+		trace=trace+W(i)
+		print *, i, W(i), transden(i,i)
+	enddo
+	print *, trace
+	deallocate(dW)
+    deallocate(dAMHM)
+    deallocate(AMHM)
+    deallocate(W)
+	stop
+	close (1)
+end subroutine read_densit
+
+
+!Процедура читает координаты и константы nacme из файла filename и записывает их coord(fistate,number_atoms)
+!param[in] filename::character(*) Имя файла, из которого будет происходить считывание координат и nacme
+!param[in] number_states::integer(4) Число состояний в молекуле
+!param[in] fistate::integer(4) Номер вектора, в который будет записываются координаты
+!param[out] coord(2,3000)::real(4) два вектора координат, каждый из которых содержит не более чем 1000 атомов. [Бор]
+!param[out] nacme(i=10,j=10,3000)::real(4) nacme, связывающие i и j, каждая из которых содержит не более чем 1000 атомов. [Бор^-1]
+!param[out] number_atoms::integer(4) Число атомов в молекуле
+subroutine read_grad(filename)
+    integer(kind=1):: action, IOS=0, s=0
+    integer(4):: k, i, j, e, number_atoms, sizes
+    character (LEN =80) STRING
+    character (LEN =10) atom_label,  labels(3000)
+    character (len =20) label_damp
+    character (LEN =*) filename
+    logical file_exists
+    real(4):: a,b,c,d, coord_g(3000), gradient(3000)
+    common/grad/ gradient, coord_g
+    INQUIRE(FILE=filename, EXIST=file_exists, size=sizes)
+    if (.not. file_exists) call write_error(2,1,filename) !Проверка наличия файла
+    if (sizes==0) call write_error(2,2,filename) !Проверка пустоты файла
+    open(unit=1, file= filename, iostat=ios)
+    !Вставить проверку на принадлежность файла к nacme расчетам
+    k=1
+    !Поиск метки за которой идет перечисление координат
+    do while (STRING/=" ATOM      ATOMIC                      COORDINATES (BOHR)")
+        read (1, '(A80)' , iostat = IOS) STRING
+        if (IOS /=0) call write_error(2,9,filename) !Ошибка: непредвиденный конец файла
+    end do
+    !Поиск метки за которой идет перечисление координат
+    do while (STRING/="           CHARGE         X                   Y                   Z")
+        read (1, '(A80)' , iostat = IOS) STRING
+        if (IOS /=0) call write_error(2,3,filename) !Ошибка: непредвиденный конец файла
+    end do
+    atom_label="C";
+    do while (k<=3000)
+        read (1, '(A10,F6.1,F20.10,F20.10,F20.10)' , iostat = IOS) atom_label, a, b, c, d
+	if (IOS /=0)  call write_error(2,4,filename) !Ошибка: непредвиденный конец файла
+        if (atom_label=="") exit
+        coord_g(k)=b; coord_g(k+1)=c; coord_g(k+2)=d
+	labels(k:k+2)=atom_label      
+        k=k+3
+    end do
+    if (k>3000) then
+        read (1, '(A10,F6.1,F20.10,F20.10,F20.10)' , iostat = IOS) atom_label, a, b, c, d
+        if (atom_label/="") call write_error(2,5,filename)
+	!Выход из цикла по достяжении конца:
+        !Ошибка: непредвиденный конец файла
+        !Ошибка: больше 1000 атомов
+    end if
+    number_atoms=(k-1)/3 !Число атомов в молекуле
+    if (number_atoms==0) call write_error(1,14,"")
+
+    do while (STRING/='                         GRADIENT OF THE ENERGY')
+        read (1, '(A80)' , iostat = IOS) STRING
+        if (IOS /=0) call write_error(2,3,filename) !Ошибка: непредвиденный конец файла
+    end do
+    !Считывание Gradients матриц
+         do while (STRING/=" UNITS ARE HARTREE/BOHR    E'X               E'Y               E'Z ")
+             read (1, '(A80)' , iostat = IOS) STRING
+             if (IOS /=0) call write_error(2,3,filename) !Ошибка: непредвиденный конец файла
+         end do
+         STRING=""
+         k=1
+	 print *, " UNITS ARE HARTREE/BOHR    E'X               E'Y               E'Z "
+         do while (k<=3*number_atoms)
+             read (1, '(I5,A15,F20.9,F20.9,F20.9)', iostat = IOS) e, label_damp, b, c, d
+             if (IOS /=0) call write_error(2,3,filename) !Ошибка: непредвиденный конец файла
+             if (label_damp=="") call write_error(2,7,filename)
+	     write (*, '(I5,A15,F20.9,F20.9,F20.9)') e, label_damp, b, c, d
+             gradient(k)=b; gradient(k+1)=c; gradient(k+2)=d
+             k=k+3
+         end do
+         if (k>3*number_atoms) then
+            read (1, '(I5.1,A14,F20.9,F20.9,F20.9)' , iostat = IOS) e, atom_label, b, c, d
+            if (atom_label/="") call write_error(2,6,filename)
+	    !Выход из цикла по достяжении конца файла: 
+            !Ошибка: больше 1000 атомов
+         end if  
+    close(1)
+end subroutine read_grad
+
+
 !Процедура читает Гессиан, массы и векторы из файла filename 
 !и записывает их соответствено в hess(3000,3000), mass(3000), vec(3000,3000) и mode(3000)
 !param[in] filename::character(*) Имя файла, из которого будет происходить считывание Гессиана и векторов
@@ -145,13 +475,14 @@ end subroutine read_nacme
 subroutine read_hess(filename)
     integer(kind=1):: action, IOS=0, max_vars
     integer(4):: i,j,k,jj,number_atoms, number_strings_hess, j_old, i_old, nm
+    integer(4):: charges(3000)
     character (LEN =80) STRING
     character (LEN =*) filename
     character (LEN =10) dump2,dump3, labels(3000)
     character (LEN =4) dump1
     real(4):: mass(3000), coord(3,3000), nacme(10,10,3000), hess(3000,3000), rv(5)
     real(4):: modet, vec(3000,3000), mode(3000)
-    common/nacme/ coord, nacme, number_atoms, labels
+    common/nacme/ coord, nacme, number_atoms, labels, charges
     common/hess/ hess, mass, vec, mode
     open(unit=2, file=filename)
 
@@ -273,16 +604,18 @@ end function to_lower
 !param[out] nacme_init_file::character(len=80) Имя файла с nacme расчетом для начального состояния
 !param[out] nacme_fin_file::character(len=80) Имя файла с nacme расчетом для конечного состояния
 !param[out] hess_file::character(len=80) Имя файла с Гессианом
-subroutine read_input()
+subroutine read_input(name_of_inp)
 	use phys_constants
 	!use file_names
 	integer(kind=1):: IOS=0
-	integer(4):: i, maxi, indexc, lenst, temper2, nsni
+	integer(4):: i, maxi, indexc, lenst, temper2, nsni, numao
 	real(4):: temper, threshold_inp,  emin_r, emax_r, estep_r
 	character (LEN =80) STRING(20), STRING2(20) , string3
+	character (LEN =255) name_of_inp
 	character (80) coord_init_file, coord_fin_file, nacme_file, hess_file, hess_log_file
-	character (80) symmetry_str, DOS_str, mode_str
-	common/file_names/coord_init_file, coord_fin_file, nacme_file, hess_file, hess_log_file
+	character (80) symmetry_str, DOS_str, mode_str, grad_file, elf_file, tr_file
+	common/file_names/coord_init_file, coord_fin_file, nacme_file, hess_file, hess_log_file, &
+	grad_file, elf_file, tr_file, numao
 	interface
 		function find_string(STRING_array, string, maxi)
 			character (80) STRING_array(20)
@@ -298,7 +631,7 @@ subroutine read_input()
 			character(len=len(strIn)) :: strOut
 		end function to_lower
 	end interface
-	open(unit=4, file= "input")
+	open(unit=4, file=name_of_inp)
 	i=1
 
 	!Строки из файла "input" переносятся в массив STRING, очищенные от комментариев
@@ -438,7 +771,7 @@ subroutine read_input()
 		end if
 		end if	
 		if (symmetry) then
-			nsni=find_string(string,"totalsymmetry", maxi) !Считывание флага симметрии Если не указана, установить symmetry=.false.
+			nsni=find_string(string,"total_symmetry", maxi) !Считывание флага симметрии Если не указана, установить symmetry=.false.
 			if (nsni/=0) then
 			read (string2(nsni), "(A80)") symmetry_str
 			if (trim(to_lower(symmetry_str))=="true") then
@@ -451,10 +784,57 @@ subroutine read_input()
 			endif
 		endif
 
-		nsni=find_string(string,"nacme_file", maxi) !Считывание имени файла с nacme расчетом для начального
-		if (nsni==0) call write_error(1,17,"") 
-		read (string2(nsni), "(A80)") nacme_file
-		if (trim(nacme_file)=="") call write_error(1,17,"") 
+		nsni=find_string(string,"naccalc", maxi) !Считывание флага необходимости расчет NACME из EFL данных. 
+								!Если нет, установить naccalc=.false. 
+		if (nsni/=0) then
+		read (string2(nsni), "(A80)") symmetry_str
+		if (trim(to_lower(symmetry_str))=="true") then
+			naccalc=.true.
+		else if (trim(to_lower(symmetry_str))=="false") then
+			naccalc=.false.
+		else 
+			call write_error(1,33,"") 
+		end if
+		end if
+
+		if (naccalc) then
+			nsni=find_string(string,"elf_file", maxi) !Считывание имени файла с EFL расчетом для начального
+			if (nsni .ne. 0) then
+				read (string2(nsni), "(A80)") elf_file
+				if (trim(elf_file)=="") call write_error(1,17,"") 
+			end if
+			
+			nsni=find_string(string,"tr_file", maxi) !Считывание имени файла с матрицей переходной плотности
+			if (nsni .ne. 0) then
+				read (string2(nsni), "(A80)") tr_file
+				if (trim(tr_file)=="") call write_error(1,17,"") 
+			end if
+
+			nsni=find_string(string,"num_ao", maxi) !Считывание имени файла с матрицей переходной плотности
+			if (nsni .ne. 0) then
+				read (string2(nsni), "(I5)") numao
+				if (numao==0) call write_error(1,17,"") 
+			end if
+			
+				nsni=find_string(string,"eifver", maxi) !Считывание вертикальной разницы энергий между состояниями
+				if (nsni==0) call write_error(1,4,"") 
+				read (String2(nsni), "(f80.10)"), Eifver
+				if (Eifver<0.0) then
+					call write_error(1,11,"") 
+				endif
+		else
+			nsni=find_string(string,"nacme_file", maxi) !Считывание имени файла с nacme расчетом для начального
+			if (nsni==0) call write_error(1,17,"") 
+			read (string2(nsni), "(A80)") nacme_file
+			if (trim(nacme_file)=="") call write_error(1,17,"") 
+		endif
+
+		nsni=find_string(string,"grad_file", maxi) !Считывание имени файла с градиентом для начального
+		if (nsni/=0) then
+			read (string2(nsni), "(A80)") grad_file
+		else
+			grad_file=""
+		end if
 
 		nsni=find_string(string,"pmcutoff", maxi) !Считываение cutoff3. Если не указана, установить cutoff3=0.00001
 		if (nsni/=0) then
@@ -507,11 +887,39 @@ subroutine read_input()
 		endif
 	end if 
 
+        if ((res_mode==1) .and. (TypeOfDOS==2)) then
+		nsni=find_string(string,"esolv", maxi) !Считываение Esolv. Если не указана, установить Esolv=0.0
+		if (nsni/=0) then
+			if (SCAN(string2(nsni),".")/=0) then
+				read (String2(nsni), "(f80.10)"), temper
+				esolv=temper
+			else 
+				call write_error(1,35,"")
+			end if
+		end if
+		write (*,"(A7,f10.8)") "Esolv=",esolv
+	endif
+
+       if ((res_mode==1) .and. (TypeOfDOS==2)) then
+		nsni=find_string(string,"wdebye", maxi) !Считываение wDebye. Если не указана, установить wDebye=0.0
+		if (nsni/=0) then
+			if (SCAN(string2(nsni),".")/=0) then
+				read (String2(nsni), "(f80.10)"), temper
+				wDebye=temper
+			else 
+				call write_error(1,36,"")
+			end if
+		end if
+		write (*,"(A7,f10.8)") "wDebye=",wDebye
+	endif
+
 	if ((res_mode==1) .or. (res_mode==2)) then
 			nsni=find_string(string,"eif", maxi) !Считывание разницы энергий между начальным и конечным состояниями
 		if (nsni==0) call write_error(1,4,"") 
 		read (String2(nsni), "(f80.10)"), Eif
-		if (Eif<0.0) call write_error(1,11,"") 
+		if (((Esolv/=0.0) .or. (wDebye/=0.0)) .and. (Eif<0.0)) then
+			call write_error(1,11,"") 
+		endif
 	endif 
 
 
@@ -528,7 +936,6 @@ subroutine read_input()
 		end if
 		write (*,"(A7,f10.8)") "Cutoff=",cutoff
 	endif
-
 
 	nsni=find_string(string,"cutoff", maxi) !Считываение cutoff. Если не указана, установить cutoff=0.00001
 	if (nsni/=0) then
@@ -575,7 +982,7 @@ subroutine read_input()
 	if (trim(hess_log_file)=="") call write_error(1,7,"")
 
 
-	nsni=find_string(string,"numrotrrm",maxi) !Считывание числа мод, которые исключаются из расчета. Если не укзано, то их 6.
+	nsni=find_string(string,"numrottrm",maxi) !Считывание числа мод, которые исключаются из расчета. Если не укзано, то их 6.
 	if (nsni/=0) then
 		read (String2(nsni), "(I80)"), NumRotTrM
 	else 

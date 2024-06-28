@@ -6,7 +6,7 @@ module errors_description
 	data TypeError(1:3) /	"Error in input file", & ! Type 1
 				"Input data error", & ! Type 2
 				"Calculation error"/ ! Type 3
-	data InputFilesErrors(1:34) /&
+	data InputFilesErrors(1:39) /&
 	"Number of states does not determined in the input file", & ! code 1
 	"Number of the initial state does not determined in the input file", & ! code 2
 	"Number of the final state does not determined in the input file", & ! code 3
@@ -40,7 +40,12 @@ module errors_description
 	"Emax cannot be less than Emin", & !Code 31
 	"Estep cannot be negative", & !Code 32
 	"Symmetry is defined incorrect", & !Code 33
-	"TotalSymmetry is defined incorrect"/ !Code 34
+	"TotalSymmetry is defined incorrect", & !Code 34
+        "'Esolv' has incorrect format", & !Code 35
+	"'wDebye' has incorrect format", & !Code 36
+	"naccalc is defined incorrect", & !Code 37
+	"There aren't EFL of an excited state", & !Code 38
+	"The vertical energy difference does not determined in the input file"/ !Code 39
 	data InputDataErrors(1:9) / 	"is not exist", & ! code 1
 					"is empty", & ! code 2
 					"has unexpected data", & ! code 3
