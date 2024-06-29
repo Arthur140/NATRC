@@ -1,0 +1,19 @@
+number_states_nacme: 2
+initial_state: 2
+final_state: 1
+deep:0.00001
+Eif: 0.0791013975
+naccalc:true
+Eifver:0.0686140607
+Esolv:0.0016076926
+wdebye:0.000218945
+Temperature: 10.0
+symmetry:false
+Threshold:0.5
+initial_coord_file: Data/Azulene/Azulene_DFT_EFL_S1_S0.log
+final_coord_file: Data/Azulene/Azulene_DFT_hessian.log
+elf_file: Data/Azulene/Azulene_DFT_EFL_S1_S0.log
+grad_file: Data/Azulene/Azulene_DFT_gradient_S1_S0.log
+hess_file: Data/Azulene/Azulene_DFT_hessian.dat
+hess_coord_file: Data/Azulene/Azulene_DFT_hessian.log
+NumRotTrM: 6

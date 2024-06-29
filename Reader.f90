@@ -1,4 +1,14 @@
-﻿!Процедура читает координаты из файла filename и записывает их в массив coord(fistate,number_atoms)
+﻿!     This file is part of NATRC.
+!
+!    Foobar is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+!
+!    NATRC is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+!
+!    You should have received a copy of the GNU General Public License along with Foobar. If not, see <https://www.gnu.org/licenses/>. 
+
+
+
+!Процедура читает координаты из файла filename и записывает их в массив coord(fistate,number_atoms)
 !param[in] filename::character(*) Имя файла, из которого будет происходить считывание координат
 !param[in] fistate::integer(4) Номер вектора, в который будет записываются координаты
 !param[out] coord(2,3000)::real(4) два вектора координат атомов [в Борах]. Каждый вектор содержит не более чем 1000 атомов 
@@ -145,7 +155,7 @@ end subroutine read_nacme
 
 subroutine read_ef(filename, init_st, fin_st)
 	integer(kind=1):: action, IOS=0, s=0
-	integer(4):: number_atoms, sizes, i, ind1, ind2, sum_calc, init_st, fin_st, charges(3000)
+	integer(4):: number_atoms, sizes, i, ind1, ind2, sum_calc, init_st, fin_st
 	character (LEN =10) labels(3000)
 	character (len =20) label_damp
 	character (LEN =*) filename
@@ -153,7 +163,7 @@ subroutine read_ef(filename, init_st, fin_st)
 	logical file_exists, elf_flag(0:10,0:10)
 	real(4):: a,b,c,d, coord(3,3000), nacme(10,10,3000), coord_buf(3000), efl_buf(3000)
 	real(4):: elfield(0:10,0:10,3000)
-	common/nacme/ coord, nacme, number_atoms, labels, charges
+	common/nacme/ coord, nacme, number_atoms, labels
 	common/elfc/ elfield, elf_flag
 	INQUIRE(FILE=filename, EXIST=file_exists, size=sizes)
 	open(unit=1, file= filename, iostat=ios)
@@ -208,7 +218,8 @@ subroutine read_ef(filename, init_st, fin_st)
 				ind2=ind1-ind2
 				ind1=ind1-ind2
 			endif
-		elseif (index(STRING,"USING THE UNRELAXED DENSITY OF EXCITED STATE") &
+		!elseif (index(STRING,"USING THE UNRELAXED DENSITY OF EXCITED STATE") &
+		elseif (index(STRING,"RELAXED DENSITY OF EXCITED STATE") &
 			.ne. 0) then
 			read (string,'(52X,I5)') ind1
 			ind2=ind1
