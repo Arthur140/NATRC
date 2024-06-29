@@ -1,7 +1,7 @@
 NATRC (Non-Adiabatic  Transfer Rates Calculations)
 
 1. Description
-NATRC is the program designed for calculation of non-adibatic transition rates between two states in molecules. Calculations are carried out based on the classical and modified Bixon-Jortner-Plotnikov models.
+NATRC is the program designed for calculation of non-adiabatic transition rates between two states in molecules. Calculations are carried out based on the classical and modified Bixon-Jortner-Plotnikov models.
 
 2. Requirements
 Linux OS 32/64-bit
@@ -55,7 +55,7 @@ You can only set a limited set of keywords as a parameter. A colon is used for s
  (Default is Pekar)
 
  threshold: !Only for DOS=Hybrid
- The threshold parameter for chosing vibronic modes which will be approximated by the Gaussian function.
+ The threshold parameter for choosing vibronic modes which will be approximated by the Gaussian function.
 
  number_states_nacme: 
  The number of states for which the NACME calculation was performed. It can only be ≥2.
@@ -82,10 +82,10 @@ You can only set a limited set of keywords as a parameter. A colon is used for s
  The path to dat-file which contains the hessian matrix of studied molecules at the ground state
 
  hess_coord:
- The path to log-file which contains the coordinats for which the hessian matrix were obtained.
+ The path to log-file which contains the coordinates for which the hessian matrix were obtained.
 
  grad_file:
- The path to log-file which contains gradient of the final state which was calculated for the equlibrium geometry of the initial state. 
+ The path to log-file which contains gradient of the final state which was calculated for the equilibrium geometry of the initial state. 
 
  naccalc:
  Flag of evaluation of NACME basing on transition integrals of Coulomb field. If you set 'true', the program will evaluate NACME using these integrals. If you set 'false',  the program will read NACME from an input file (nacme_file).
@@ -98,7 +98,7 @@ You can only set a limited set of keywords as a parameter. A colon is used for s
  The path to the file which contains transition integrals of Coulomb field obtained at the TD-DFT level of theory
 
  wdebye: !Optional
- The Debye temperature (in Hartree) for the solvent. If wdebay>0, the program will take into account the solvatation effect. 
+ The Debye temperature (in Hartree) for the solvent. If wdebay>0, the program will take into account the salvation effect. 
 
  Esolv: !Only for wdebye>0
  The reorganization energy (default is 0)
@@ -126,10 +126,3 @@ You can only set a limited set of keywords as a parameter. A colon is used for s
 
 8. License
  This project is licensed under the GNU GPL v3.0 License—see COPYING for details.
- 
- 
- 
-
-
-
-
