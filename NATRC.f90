@@ -1,13 +1,3 @@
-﻿!     This file is part of NATRC.
-!
-!    Foobar is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
-!
-!    NATRC is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-!
-!    You should have received a copy of the GNU General Public License along with Foobar. If not, see <https://www.gnu.org/licenses/>. 
-
-
-
 ﻿!  NATRC.f90 
 !
 !  FUNCTIONS:
@@ -39,7 +29,7 @@ include "errors.f90"
     character (LEN =255) name_of_inp
     character (LEN =10) labels(3000), old_labels(3000)
     integer mask(3000), Nmax(3000), n(3000), nm, mask3(3000), mask4(3000), mask4n(3000), mask5(3000), nj, nv,v
-    integer nminc(3000), nmaxc(3000), Nmin(3000), mmn, targetc, targetcc
+    integer nminc(3000), nmaxc(3000), Nmin(3000), mmn, targetc, targetcc, iiii
     real(4):: coord(3,3000),  mass(3000), nacme(10,10,3000), hess(3000,3000), FCF_value, ValForMask(3000)
     real(4):: vec(3000,3000), mode(3000), invec2(3000,3000), invec(3000,3000), mode2(3000), HRFs(3000)
     real(4):: UnMul(3000,3000), UnSum(3000,3000), BB(3000,3000), FV(3000), SV(3000), inpres(2,3000)
@@ -166,7 +156,6 @@ include "errors.f90"
 							! координаты в coords(1,1:3*number_atoms), 
 							!наименование элемента в labels(1:3*number_atoms)
     old_number_atoms=number_atoms
-	!print *,number_atoms  
     if (number_atoms<2) then !Проверяется, что в молекуле два и более атомов, иначе ошибка.
        call write_error(1,20,"")
     end if
@@ -267,10 +256,16 @@ include "errors.f90"
     coord(3,3:nm:3)=coord(3,3:nm:3)-centr_z
     !Выставляется в начало координат центр масс молекулы в той конфигурации, в которой происходил расчет Гессиана
 
+
     
+	!coord(3,10)=coord(3,10)+50.0
+    !inpres(:,:)=rotate_molecula(coord(2,:),coord(3,:),number_atoms,mass,gradient(:))
     inpres(:,:)=rotate_molecula(coord(2,:),coord(3,:),number_atoms,mass,coord(2,:))
     coord(2,:)=inpres(1,:)
+    !gradient(fin_state0,:)=inpres(2,:)
+	
     inpres(:,:)=rotate_molecula(coord(1,:),coord(2,:),number_atoms,mass,nacme(fin_state0,init_state0,:))
+	
     coord(1,:)=inpres(1,:)
     nacme(fin_state0,init_state0,:)=inpres(2,:)
     inpres(:,:)=rotate_molecula(coord_g(:),coord(2,:),number_atoms,mass,gradient(:))
@@ -297,6 +292,8 @@ include "errors.f90"
     omega=mode2
 
     HRFs=HuangRhys(omega,invec2,mass,coord(1,:),coord(2,:),3*number_atoms) !Расчет факторов Хуанга-Риса
+    !HR_Q(1:nm)=sqrt(mass(1:nm))*(coord(2,1:nm)-coord(1,1:nm)) !!!Mark3
+    !HR_Q(1:nm)=matmul(invec2(1:nm,1:nm),HR_Q(1:nm)) !!!Mark4
     HR_Q(1:nm)=(coord(2,1:nm)-coord(1,1:nm))
     nbe(NumRotTrM+1:3*number_atoms)=(exp(omega(NumRotTrM+1:3*number_atoms)/kT)-1.0)**(-1) !Расчет распределения Больцмана по модам
 
@@ -378,8 +375,13 @@ include "errors.f90"
 		mask5(NumRotTrM+1:3*number_atoms)=1
 	endif
 
+	!if (Threshold>=cutoff) then
 		mask4(NumRotTrM+1:3*number_atoms)=transfer(((omega(NumRotTrM+1:3*number_atoms) <=Eif+delta) .and. &
   		 (HRFs(NumRotTrM+1:3*number_atoms)>Threshold)),mask(NumRotTrM+1:3*number_atoms)) 
+	!else
+	!	mask4(NumRotTrM+1:3*number_atoms)=transfer(((omega(NumRotTrM+1:3*number_atoms) <=Eif+delta) .and. &
+  	!	 (HRFs(NumRotTrM+1:3*number_atoms)>cutoff)),mask(NumRotTrM+1:3*number_atoms))
+	!endif
    
 
 !!!Mark11start*************************************************
@@ -434,6 +436,7 @@ include "errors.f90"
 	KFCF=0.0
 	Kgrad=0.0
 	Kalpha=0.0
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         if (grad_file/="") then
 	do i=NumRotTrM+1,nm
 		KFCF=KFCF+abs((omega(i)**2)*HR_Q(i))
@@ -474,6 +477,7 @@ include "errors.f90"
 	end if
 	print *, "------------------"
 	write (*,'(A5,F6.3)') "GAP =",GAP
+	!stop
 	if (GAP>0.1) then
 		print *, "Attention!!! GAP is larger than 0.1"
 	endif
@@ -525,6 +529,8 @@ include "errors.f90"
 		EndCycle=.false.
 		mask4n=mask
 		mask4n(k)=0.0
+		!print '(100I1)', mask
+ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		!Vsum=0.0 !Инициализация переменной для суммирования квадратов возмущений
     		FCF_value=0.0 !Инициализация переменной для суммирования факторов франка-Кондона
     		EndCycle=.false. !Инициализация флага остановки цикла перебора мод
@@ -581,6 +587,7 @@ include "errors.f90"
              			end if
           		end do
        		end do
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	        if (mask3(k)>0) then
 			resultval=0.0
 			Vsum2add=(SV(k)**2)*omega(k)*FCF_value
@@ -639,6 +646,7 @@ include "errors.f90"
 					del_w2=sqrt(sum(HRFs(NumRotTrM+1:nm)*(omega(NumRotTrM+1:nm)**2)*&
 						(2*nbe(NumRotTrM+1:nm)+1.0)*mask4n(NumRotTrM+1:nm)))
 					Er=sum(HRFs(NumRotTrM+1:nm)*omega(NumRotTrM+1:nm)*mask4n(NumRotTrM+1:nm))
+					!Evib=sum(n(NumRotTrM+1:nm)*Omega(NumRotTrM+1:nm)*mask4n(NumRotTrM+1:nm))
 					Evib=sum(n(NumRotTrM+1:nm)*Omega(NumRotTrM+1:nm)*mask4(NumRotTrM+1:nm))
 					resultval=exp(-((Eif-Evib-Er)**2)/(2.0*(del_w2**2)))/del_w2
 				endif
@@ -708,11 +716,9 @@ include "errors.f90"
 						endif
 						Vsum2=Vsum2+Vsum2add
 						nj=nj+1
+						print *, j, j, Vsum2add
 					enddo
-					if (.not. isnan(Vsum2)) then
-						Vsum1=Vsum1+SV(v)*sqrt(omega(v))*exp(-HRFs(v))*Vsum2
-					endif
-					print *, j, v, SV(v)*sqrt(omega(v))*exp(-HRFs(v))*Vsum2
+					Vsum1=Vsum1+SV(v)*sqrt(omega(v))*exp(-HRFs(v))*Vsum2
 				endif
 				enddo
 				Vsum=Vsum+SV(j)*sqrt(omega(j))*exp(-HRFs(j))*Vsum1
@@ -745,18 +751,18 @@ include "errors.f90"
 					Vsum2=Vsum2+Vsum2add
 					nj=nj+1
 				end do
-				if (.not. isnan(Vsum2)) then
-					Vsum=Vsum+(SV(j)**2)*omega(j)*exp(-HRFs(j))*Vsum2
-				endif
+				Vsum=Vsum+(SV(j)**2)*omega(j)*exp(-HRFs(j))*Vsum2
 				print *, j, j, (SV(j)**2)*omega(j)*exp(-HRFs(j))*Vsum2
 			endif
 	     		end do
 			
 		elseif (TypeOfDOS==1) then
 	     		do  j=NumRotTrM+1,nm
+			!do  j=7,nm
 			if (mask5(j)>0) then
 				Vsum1=0.0
 				do  v=j+1,nm
+				!do v=43,nm
 				if (mask5(v)>0) then
 					HRFsm=HRFs; HRFsm(j)=0.0; HRFsm(v)=0.0
 					omegam=omega; omegam(j)=0.0; omegam(v)=0.0
@@ -781,38 +787,55 @@ include "errors.f90"
 						
 						do while (((nv<2) .or. (Vsum3add>0.001*cutoff2*Vsum3)) .and. ((minv<=nv) .and. (nv<=maxv)))
 							stepC=0.01
+							!nv=7 !!!!!!!!!!!################################################
 							if (eif-omega(j)*nj-omega(v)*nv>0.0) then
 								wr=real(wn_c(eif-omega(j)*nj-omega(v)*nv,w0,&
 									sigma0,sigma0s,sigma1,sigma1s,0))
+								!wr=-6010.0
 								wi=aimag(wn_c(eif-omega(j)*nj-omega(v)*nv,w0,&
 									sigma0,sigma0s,sigma1,sigma1s,0))
+								!print *, wr, wi
 								g1c=cmplx(1.0,1.0)
 								do while ((abs(g1c)>0.0001) .and. (sqrt(wr**2+wi**2)<2000.0))
 									g1c=g1fun(cmplx(wr,wi),HRFsm,omegam,nbem,Eif-omega(j)*nj-&
 										omega(v)*nv,NumRotTrM,3*number_atoms,mask)
+									!print *, g1c
+									!do i=7,nm
+								!print *, nbem(i),cmplx(wr,wi)*omega(i),exp(-cmplx(wr,wi)*omega(i))
+									!end do
 									g1r=real(g1c)
 									g1i=aimag(g1c)
 									stepC=sqrt(abs(g1c)**(1/2))
 									if (stepC>0.01) stepC=0.01
 									wr=wr-stepC*g1r/sqrt(g1r**2.0+g1i**2.0)
 									wi=wi-stepC*g1i/sqrt(g1r**2.0+g1i**2.0)
+									!print *, wr, wi, g1r, g1i
+								!	print *, wr, wi, real(exp(gfun(cmplx(wr,wi),HRFsm,omegam,nbem,&
+								!	Eif-omega(j)*nj-omega(v)*nv,NumRotTrM,3*number_atoms,mask)))/&
+								!	sqrt(abs(g2fun(cmplx(wr,wi),HRFsm,omegam,nbem,&
+								!	Eif-omega(j)*nj-omega(v)*nv,NumRotTrM,3*number_atoms,mask))*difact(nv))
 								end do
+								!stop
 								if (sqrt(wr**2+wi**2)<2000.0) then
 									resultval=exp(gfun(cmplx(wr,wi),HRFsm,omegam,nbem,&
 										Eif-omega(j)*nj-omega(v)*nv,NumRotTrM,3*number_atoms,mask))
 								else
 									resultval=0.0
+									print *, "resultval=0.0"
 								endif
 								g2v=g2fun(cmplx(wr,wi),HRFsm,omegam,nbem,&
 									Eif-omega(j)*nj-omega(v)*nv,NumRotTrM,3*number_atoms,mask)
 								Vsum3add=abs(nv-HRFs(v))*(HRFs(v)**(nv-1))*sqrt(HRFs(v))*real(resultval)/&
 									(sqrt(abs(g2v))*difact(nv))
 								Vsum3=Vsum3+Vsum3add
-								if (Vsum3add<0.0) then
-								print *, "Vsum3add",abs(nv-HRFs(v)),HRFs(v)**(nv-1),sqrt(HRFs(v)),sqrt(HRFs(v))
-								print *,  j, v, nj, nv, resultval,difact(nv)
-								stop
-								end if
+								!print *, nj, nv, HRFs(j), HRFs(v), Vsum3add, resultval, difact(nj), difact(nj)
+								!stop
+								!print *, j, v, nj, nv, wr, wi, Vsum3add
+								!if (Vsum3add<0.0) then
+								!print *, "Vsum3add",abs(nv-HRFs(v)),HRFs(v)**(nv-1),sqrt(HRFs(v)),sqrt(HRFs(v))
+								!print *,  j, v, nj, nv, resultval,difact(nv)
+								!stop
+								!end if
 							else
 								mask4n=mask
 								mask4n(j)=0.0; mask4n(v)=0.0
@@ -827,17 +850,18 @@ include "errors.f90"
 							nv=nv+1
 						enddo
 						Vsum2add=abs(nj-HRFs(j))*(HRFs(j)**(nj-1))*sqrt(HRFs(j))*Vsum3/difact(nj)
+						!print *, nj, HRFs(j)**(nj-1), HRFs(j), Vsum3, difact(nj)
 						if (Vsum2add<0.0) then
 							print *, "Vsum2add", abs(nj-HRFs(j)),(HRFs(j)**(nj-1)),sqrt(HRFs(j))
 							print *,  j, v, nj, nv, resultval,difact(nj)
+							!stop
 						endif
 						Vsum2=Vsum2+Vsum2add
 						nj=nj+1
 					enddo
-					if (.not. isnan(Vsum2)) then
-						Vsum1=Vsum1+SV(v)*sqrt(omega(v))*exp(-HRFs(v))*Vsum2
-					endif
+					Vsum1=Vsum1+SV(v)*sqrt(omega(v))*exp(-HRFs(v))*Vsum2
 					print *, j, v, SV(v)*sqrt(omega(v))*exp(-HRFs(v))*Vsum2
+					!stop
 				endif
 				enddo
 				Vsum=Vsum+SV(j)*sqrt(omega(j))*exp(-HRFs(j))*Vsum1
@@ -845,6 +869,7 @@ include "errors.f90"
 			enddo
 			
 			Vsum=2*Vsum
+			print *, "Vsum=",Vsum
 			
 			do  j=NumRotTrM+1,nm
 			if (mask5(j)>0) then
@@ -882,18 +907,16 @@ include "errors.f90"
 						Vsum2add=((nj-HRFs(j))**2)*(HRFs(j)**(nj-1))*real(resultval)/&
 							(sqrt(abs(g2v))*difact(nj))
 						Vsum2=Vsum2+Vsum2add
-						print *, nj, Vsum2add
 					else
 						Vsum2add=0.0
 					end if
 					nj=nj+1
 				end do
-				if (.not. isnan(Vsum2)) then
-					Vsum=Vsum+(SV(j)**2)*omega(j)*exp(-HRFs(j))*Vsum2
-				endif
+				Vsum=Vsum+(SV(j)**2)*omega(j)*exp(-HRFs(j))*Vsum2
 				print *, j, j, (SV(j)**2)*omega(j)*exp(-HRFs(j))*Vsum2
 			endif
 	     		enddo
+			print *, "Vsum=",Vsum
 			
 		endif
         
@@ -902,7 +925,12 @@ include "errors.f90"
     elseif (res_mode==2) then
        !Начало расчета ISC
 	if ((TypeOfDOS==2) .or. (TypeOfDOS==3)) then 
-		!Инициализация переменной для суммирования квадратов возмущений
+!!!!!!!!!!!!!!!!!!!!
+		!EndCycle=.false.
+		!mask4n=mask
+		!mask4n(k)=0.0
+ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		!Vsum=0.0 !Инициализация переменной для суммирования квадратов возмущений
     		FCF_value=0.0 !Инициализация переменной для суммирования факторов франка-Кондона
     		EndCycle=.false. !Инициализация флага остановки цикла перебора мод
 		residual=Eif+delta
@@ -957,6 +985,7 @@ include "errors.f90"
           		end do
        		end do
 		resultval=FCF_value			
+!!!!!!!!!!!!!!!!!!!!
 	else if (TypeOfDOS==1) then
 		stepC=0.1
 		resultval=0.0
@@ -979,15 +1008,12 @@ include "errors.f90"
 
        !Конец расчета ISC
     elseif (res_mode==3) then
-	if (TypeOfDOS==3) then
-		del_w2=sqrt(sum(HRFs(NumRotTrM+1:nm)*(omega(NumRotTrM+1:nm)**2)*(2*nbe(NumRotTrM+1:nm)+1.0)*&!!!
-			mask(NumRotTrM+1:nm))+2.0*kT*Esolv)!!!
-	end if
 	print *, ""
 	print *, "-------------------------------------------------"
 	print *,"  Eif             Density"
 	print *, "-------------------------------------------------"
 	do kk=0, int((MaxEnergyRange-MinEnergyRange)/StepEnergyRange)
+	!do Eif=MinEnergyRange, MaxEnergyRange, StepEnergyRange
 		Eif=MinEnergyRange+StepEnergyRange*kk
 		Vsum=0.0 !Инициализация переменной для суммирования квадратов возмущений
     		FCF_value=0.0 !Инициализация переменной для суммирования факторов франка-Кондона
@@ -1002,6 +1028,7 @@ include "errors.f90"
        			residual=residual-n(i)*omega(i)
     		end do
 		!Цикл в котором происходит перебор квантовых чисел
+		!!!!!!!!!!!!!!!!!!!!!!!!!!
        		do while (.not. EndCycle)
 			del_w2=sqrt(sum(HRFs(NumRotTrM+1:nm)*(omega(NumRotTrM+1:nm)**2)*(2*nbe(NumRotTrM+1:nm)+1.0)*&!!!
 				mask(NumRotTrM+1:nm)))!!!
@@ -1045,7 +1072,7 @@ include "errors.f90"
              			end if
           		end do
        		end do
-		resultval=FCF_value
+		resultval=FCF_value!/del_w
 	else if (TypeOfDOS==1) then
 		stepC=0.1
 		resultval=0.0

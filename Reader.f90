@@ -1,14 +1,4 @@
-﻿!     This file is part of NATRC.
-!
-!    Foobar is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
-!
-!    NATRC is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-!
-!    You should have received a copy of the GNU General Public License along with Foobar. If not, see <https://www.gnu.org/licenses/>. 
-
-
-
-!Процедура читает координаты из файла filename и записывает их в массив coord(fistate,number_atoms)
+﻿!Процедура читает координаты из файла filename и записывает их в массив coord(fistate,number_atoms)
 !param[in] filename::character(*) Имя файла, из которого будет происходить считывание координат
 !param[in] fistate::integer(4) Номер вектора, в который будет записываются координаты
 !param[out] coord(2,3000)::real(4) два вектора координат атомов [в Борах]. Каждый вектор содержит не более чем 1000 атомов 
@@ -48,7 +38,7 @@ subroutine read_coord(filename,fistate)
 	write (*, '(A10,F6.1,F20.10,F20.10,F20.10)') atom_label, a, b, c, d
         coord(fistate,k)=b; coord(fistate,k+1)=c; coord(fistate,k+2)=d 
 	charges(k:k+2)=int(a)
-	labels(k:k+2)=atom_label       
+	labels(k:k+2)=atom_label          
         k=k+3
     end do
     if (k>3000) then
@@ -59,7 +49,6 @@ subroutine read_coord(filename,fistate)
         !Ошибка: больше 1000 атомов
     end if
     number_atoms=(k-1)/3
-	!print *, number_atoms
     if (number_atoms==0) call write_error(1,14,"")
     close(3)
 end subroutine read_coord
@@ -73,14 +62,14 @@ end subroutine read_coord
 !param[out] number_atoms::integer(4) Число атомов в молекуле
 subroutine read_nacme(filename, number_states, fistate)
     integer(kind=1):: action, IOS=0, s=0
-    integer(4):: k, i, j, e, number_atoms, number_states, fistate, sizes, charges(3000)
+    integer(4):: k, i, j, e, number_atoms, number_states, fistate, sizes
     character (LEN =80) STRING
     character (LEN =10) atom_label,  labels(3000)
     character (len =20) label_damp
     character (LEN =*) filename
     logical file_exists
     real(4):: a,b,c,d, coord(3,3000), nacme(10,10,3000)
-    common/nacme/ coord, nacme, number_atoms, labels, charges
+    common/nacme/ coord, nacme, number_atoms, labels
     INQUIRE(FILE=filename, EXIST=file_exists, size=sizes)
     if (.not. file_exists) call write_error(2,1,filename) !Проверка наличия файла
     if (sizes==0) call write_error(2,2,filename) !Проверка пустоты файла
@@ -263,15 +252,15 @@ end subroutine read_ef
 subroutine read_transit(filename, init_st, fin_st, numAO)
 	integer(kind=1):: action, IOS=0, s=0
 	integer(4):: number_atoms, sizes, i, j, ind1, ind2, sum_calc, init_st, fin_st,str_ind
-	integer(4):: numAO, charges(3000)
+	integer(4):: numAO
 	character (LEN =10) labels(3000)
 	character (len =20) label_damp
 	character (LEN =*) filename
 	character (LEN =80) STRING
 	logical file_exists, elf_flag(0:10,0:10)
 	real(4):: a,b,c,d, coord_buf(3000), efl_buf(3000)
-	real(4):: transden(3000,3000), Trace, coord(3,3000), nacme(10,10,3000)
-	common/nacme/ coord, nacme, number_atoms, labels, charges
+	real(4):: transden(3000,3000), Trace
+	common/nacme/ coord, nacme, number_atoms, labels
 	common/elfc/ elfield, elf_flag
 	INQUIRE(FILE=filename, EXIST=file_exists, size=sizes)
 	open(unit=1, file= filename, iostat=ios)
@@ -318,19 +307,19 @@ end subroutine read_transit
 subroutine read_densit(filename, init_st, fin_st, numAO)
 	integer(kind=1):: action, IOS=0, s=0
 	integer(4):: number_atoms, sizes, i, j, ind1, ind2, sum_calc, init_st, fin_st,str_ind
-	integer(4):: numAO, lwork, info, charges(3000)
+	integer(4):: numAO, lwork, info
 	character (LEN =10) labels(3000)
 	character (len =20) label_damp
 	character (LEN =*) filename
 	character (LEN =80) STRING
 	logical file_exists, elf_flag(0:10,0:10)
 	real(4):: a,b,c,d, coord_buf(3000), efl_buf(3000)
-	real(4):: transden(3000,3000), Trace, work(8999), coord(3,3000), nacme(10,10,3000)
+	real(4):: transden(3000,3000), Trace, work(8999)
 	real(8)::dwork(8999) 
     character(len=10)::let1
     real(8),allocatable:: dAMHM(:,:),dW(:)
     real(4),allocatable::AMHM(:,:),W(:)
-	common/nacme/ coord, nacme, number_atoms, labels, charges
+	common/nacme/ coord, nacme, number_atoms, labels
 	common/elfc/ elfield, elf_flag
 	external dsyev
 	INQUIRE(FILE=filename, EXIST=file_exists, size=sizes)
@@ -486,14 +475,13 @@ end subroutine read_grad
 subroutine read_hess(filename)
     integer(kind=1):: action, IOS=0, max_vars
     integer(4):: i,j,k,jj,number_atoms, number_strings_hess, j_old, i_old, nm
-    integer(4):: charges(3000)
     character (LEN =80) STRING
     character (LEN =*) filename
     character (LEN =10) dump2,dump3, labels(3000)
     character (LEN =4) dump1
     real(4):: mass(3000), coord(3,3000), nacme(10,10,3000), hess(3000,3000), rv(5)
     real(4):: modet, vec(3000,3000), mode(3000)
-    common/nacme/ coord, nacme, number_atoms, labels, charges
+    common/nacme/ coord, nacme, number_atoms, labels
     common/hess/ hess, mass, vec, mode
     open(unit=2, file=filename)
 
@@ -898,7 +886,7 @@ subroutine read_input(name_of_inp)
 		endif
 	end if 
 
-        if ((res_mode==1) .and. (TypeOfDOS==2)) then
+        if ((res_mode==1) .and. ((TypeOfDOS==2) .or. (TypeOfDOS==1))) then
 		nsni=find_string(string,"esolv", maxi) !Считываение Esolv. Если не указана, установить Esolv=0.0
 		if (nsni/=0) then
 			if (SCAN(string2(nsni),".")/=0) then
@@ -911,7 +899,7 @@ subroutine read_input(name_of_inp)
 		write (*,"(A7,f10.8)") "Esolv=",esolv
 	endif
 
-       if ((res_mode==1) .and. (TypeOfDOS==2)) then
+       if ((res_mode==1) .and. ((TypeOfDOS==2) .or. (TypeOfDOS==1))) then
 		nsni=find_string(string,"wdebye", maxi) !Считываение wDebye. Если не указана, установить wDebye=0.0
 		if (nsni/=0) then
 			if (SCAN(string2(nsni),".")/=0) then

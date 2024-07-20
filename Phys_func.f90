@@ -1,13 +1,3 @@
-﻿!     This file is part of NATRC.
-!
-!    Foobar is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
-!
-!    NATRC is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-!
-!    You should have received a copy of the GNU General Public License along with Foobar. If not, see <https://www.gnu.org/licenses/>. 
-
-
-
 module phys_constants
 	real(4)::speed_light=137.035999084 !Скорость света в атомных единицах
 	real(4)::kT=0.00094418498724 !Энергия kT выраженная в Хартри при T=298.15K
@@ -87,7 +77,7 @@ function FCF(P_n, NMRT, nm,mask)
 			FCF=FCF*UnMul(k,P_n(k)+1)
 		end if
 	end do
-	FCF=product(P_Mu(NMRT+1:nm))
+	!FCF=product(P_Mu(NMRT+1:nm))
 	return
 end function FCF
 
@@ -96,6 +86,8 @@ function wn_c(wl,w0,s0,s0s,s1,s1s,n)
 	complex(4)::wn_c
 	real(4)::A,B,C,wl,w0,s0,s0s,s1,s1s,z
 	integer(4)::n
+	!z=wl/(w0*sqrt(s0*s0s))
+	!A=(1.0+s1/(w0*s0))*(log(z+sqrt(z**2+1.0))-log(s0/s0s)/2.0)/w0
 	z=wl/(w0*s0)
 	A=(1.0+s1/(w0*s0))*log(z+sqrt(z**2+(s0s/s0)))/w0
 	B=(1.0+s1/(w0*s0))/w0
@@ -154,6 +146,7 @@ function g2fun(wn_c,HRFs,omega,nbe,Eif2,NMRT,nm,mask)
 	endif
 	return
 end function g2fun
+
 
 !Функция находит один из множителей фактора Франка-Кондона при заданных факторе Хуанна-Риса и КЧ
 !param[in] HRF::real(4) фактор Хуана-Риса
@@ -261,6 +254,7 @@ subroutine found_area(HRFs,omega,NMRT,nm, cutoff)
 		k=1
 		do !Поиск максимального значения КЧ, при котором значение функции меньше чем максимального на cutoff
 			if (sec_func(max_loc1+k,HRFs(i),omega(i))<=cutoff*max_val1) exit
+			!print *, sec_func(max_loc1+k,HRFs(i),omega(i)), cutoff*max_val1
 			k=k+1 
 		end do
 		nmaxc(i)=max_loc1+k !Максимальное значение КЧ для i-ой моды
@@ -291,6 +285,7 @@ function rotate_molecula(coord_rot,coord_ref,numbers_of_atoms,mass,apar)
 	!Поиск самого тяжелого атома
 	do i=1,numbers_of_atoms
 		atom_pos(i)=i
+		!print *, mass(3*(i-1)+1), coord_ref(3*(i-1)+1), coord_ref(3*(i-1)+2), coord_ref(3*(i-1)+3)
 	end do
 	mass_of_atoms(1:numbers_of_atoms)=mass(1:numbers_of_atoms:3)
 	do i=1,numbers_of_atoms
@@ -338,13 +333,23 @@ function rotate_molecula(coord_rot,coord_ref,numbers_of_atoms,mass,apar)
 	end do
 	!Определение координат самых тяжелых атомов для референсной и поварачиваемой молекулы
 	theta0=acos(z/r)
-	phi0=atan2(y,x)
+	!phi0=atan2(y,x)
+	if (x>0.0) then
+		phi0=atan(y/x)
+	else
+		phi0=atan(y/x)+3.1415927
+	endif
 	x=coord_rot(3*(hap-1)+1)
 	y=coord_rot(3*(hap-1)+2)
 	z=coord_rot(3*hap)
 	r=sqrt(x*x+y*y+z*z)
 	theta1=acos(z/r)
-	phi1=atan2(y,x)
+	!phi1=atan2(y,x)
+	if (x>0.0) then
+		phi1=atan(y/x)
+	else
+		phi1=atan(y/x)+3.1415927
+	endif
 
 	!Совмещение на одной оси самых тяжелых атомов из двух молекула
 	nm=3*numbers_of_atoms
@@ -402,8 +407,19 @@ function rotate_molecula(coord_rot,coord_ref,numbers_of_atoms,mass,apar)
 	! Поворот вращаемой молекулы вокруг оси z так, чтобы второй по тяжести атом 
 	! оказался в одной плоскости со своим гомологом из референсной
 	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	psi0=atan2(coord_ref(3*(hap2-1)+2), coord_ref(3*(hap2-1)+1)) !Угол поворота для молекулы в конечном состоянии
-	psi1=atan2(coord_rot(3*(hap2-1)+2), coord_rot(3*(hap2-1)+1))
+	!psi0=atan2(coord_ref(3*(hap2-1)+2), coord_ref(3*(hap2-1)+1)) !Угол поворота для молекулы в конечном состоянии
+	!psi1=atan2(coord_rot(3*(hap2-1)+2), coord_rot(3*(hap2-1)+1))
+	
+	if (coord_ref(3*(hap2-1)+1)>0.0) then
+		psi0=atan(coord_ref(3*(hap2-1)+2)/coord_ref(3*(hap2-1)+1))
+	else
+		psi0=atan(coord_ref(3*(hap2-1)+2)/coord_ref(3*(hap2-1)+1))+3.1415927
+	endif
+	if (coord_rot(3*(hap2-1)+1)>0.0) then
+		psi1=atan(coord_rot(3*(hap2-1)+2)/coord_rot(3*(hap2-1)+1))
+	else
+		psi1=atan(coord_rot(3*(hap2-1)+2)/coord_rot(3*(hap2-1)+1))+3.1415927
+	endif
 	old_coord(1:3*numbers_of_atoms)=coord_rot(1:3*numbers_of_atoms)
 	coord_rot(1:nm:3)=old_coord(1:nm:3)*cos(psi0-psi1)-old_coord(2:nm:3)*sin(psi0-psi1) !Поворот молекулы
 	coord_rot(2:nm:3)=old_coord(1:nm:3)*sin(psi0-psi1)+old_coord(2:nm:3)*cos(psi0-psi1)
@@ -440,11 +456,16 @@ function rotate_molecula(coord_rot,coord_ref,numbers_of_atoms,mass,apar)
 	axy=1.0
 	ayz=1.0
 	azx=1.0
-	do while (abs(axy)+abs(ayz)+abs(azx)>0.0000001)
+	do while (abs(axy)+abs(ayz)+abs(azx)>0.00000001)
 	!Поворот вокруг оси z	
 	high=sum((coord_rot(1:nm:3)*coord_ref(2:nm:3)-coord_rot(2:nm:3)*coord_ref(1:nm:3))*mass(1:nm:3))
     	low=sum((coord_rot(1:nm:3)*coord_ref(1:nm:3)+coord_rot(2:nm:3)*coord_ref(2:nm:3))*mass(1:nm:3))
-    	axy=atan(high/low) !Угол поворота для молекулы в конечном состоянии
+    	!axy=atan(high/low) !Угол поворота для молекулы в конечном состоянии
+	if (low>0.0) then
+		axy=atan(high/low)
+	else
+		axy=atan(high/low)+3.1415927
+	endif
 	!print *, axy
     	old_coord(1:3*numbers_of_atoms)=coord_rot(1:3*numbers_of_atoms)
     	coord_rot(1:nm:3)=old_coord(1:nm:3)*cos(axy)-old_coord(2:nm:3)*sin(axy) !Поворот молекулы
@@ -456,7 +477,12 @@ function rotate_molecula(coord_rot,coord_ref,numbers_of_atoms,mass,apar)
 	!Поворот вокруг оси x
 	high=sum((coord_rot(2:nm:3)*coord_ref(3:nm:3)-coord_rot(3:nm:3)*coord_ref(2:nm:3))*mass(1:nm:3))
     	low=sum((coord_rot(2:nm:3)*coord_ref(2:nm:3)+coord_rot(3:nm:3)*coord_ref(3:nm:3))*mass(1:nm:3))
-    	ayz=atan(high/low) !Угол поворота для молекулы в конечном состоянии
+    	!ayz=atan(high/low) !Угол поворота для молекулы в конечном состоянии
+	if (low>0.0) then
+		ayz=atan(high/low)
+	else
+		ayz=atan(high/low)+3.1415927
+	endif
 	!print *, ayz
     	old_coord(1:3*numbers_of_atoms)=coord_rot(1:3*numbers_of_atoms)
     	coord_rot(2:nm:3)=old_coord(2:nm:3)*cos(ayz)-old_coord(3:nm:3)*sin(ayz) !Поворот молекулы
@@ -468,7 +494,12 @@ function rotate_molecula(coord_rot,coord_ref,numbers_of_atoms,mass,apar)
 	!Поворот вокруг оси y
 	high=sum((coord_rot(3:nm:3)*coord_ref(1:nm:3)-coord_rot(1:nm:3)*coord_ref(3:nm:3))*mass(1:nm:3))
     	low=sum((coord_rot(3:nm:3)*coord_ref(3:nm:3)+coord_rot(1:nm:3)*coord_ref(1:nm:3))*mass(1:nm:3))
-    	azx=atan(high/low) !Угол поворота для молекулы в конечном состоянии
+    	!azx=atan(high/low) !Угол поворота для молекулы в конечном состоянии
+	if (low>0.0) then
+		azx=atan(high/low)
+	else
+		azx=atan(high/low)+3.1415927
+	endif
 	!print *, azx
     	old_coord(1:3*numbers_of_atoms)=coord_rot(1:3*numbers_of_atoms)
     	coord_rot(3:nm:3)=old_coord(3:nm:3)*cos(azx)-old_coord(1:nm:3)*sin(azx) !Поворот молекулы
